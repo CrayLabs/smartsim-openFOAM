@@ -18,7 +18,7 @@ installing OpenFOAM 5.x on your system.
 
 ### Building OpenFOAM on a Cray XC
 
-The
+These directions were adapted from public instructions for building OpenFOAM on the Titan supercomputer and should be applicable to a wide range of Cray systems.  However, these instructions were tested specifically on a Cray XC system.
 
 If the ``PrgEnv-cray`` module is loaded by default on your Cray XC system, execute:
 
@@ -73,14 +73,39 @@ cray)
     ;;
 ```
 
-Cray MPI options need to be added to ``OpenFOAM-5.x/etc/config.sh/mpi``. These options are shown in the block below, and ``smartsim-openFOAM/builds/cray_xc/mpi`` shows the proper placement of these options.
+Cray MPI settings need to be added to ``OpenFOAM-5.x/etc/config.sh/mpi``. These options are shown in the block below, and ``smartsim-openFOAM/builds/cray_xc/mpi`` shows the proper placement of these options.  Verify that your current environment has ``$MPICH_DIR`` set to the correct path.  If not, this ``MPICH_DIR`` should be set to the MPICH install directory.
 
 ```
-# Add these Cray compiler settings to OpenFOAM-5.x/etc/config.sh/mpi
+# Add these Cray MPI settings to OpenFOAM-5.x/etc/config.sh/mpi
 MPICH2)
     export FOAM_MPI=mpich2
     export MPI_ARCH_PATH=$MPICH_DIR
     ;;
 ```
+
+The OpenFOAM build environment can now be set up with:
+
+```
+cd OpenFOAM-5.x && source etc/bashrc && cd ..
+```
+
+Before OpenFOAM can be built, third-party dependencies need to be built.  To build these dependencies on the Cray XC, copy the build settings provided in ``smartsim-openFOAM`` to ``ThirdParty-5.x``:
+
+```
+cp smartsim-openFOAM/builds/cray_xc/Makefile.inc.i686_pc_linux2.shlib-OpenFOAM ThirdParty-5.x/etc/wmakeFiles/scotch/
+```
+
+Now, build the OpenFOAM third-party dependencies:
+
+```
+cd ThirdParty-5.x && ./Allwmake -j 8 && cd..
+```
+
+OpenFOAM can now be built:
+
+```
+cd OpenFOAM-5.x && ./Allwmake -j 8 && cd..
+```
+
 
 ### Adding SmartRedis to OpenFOAM
