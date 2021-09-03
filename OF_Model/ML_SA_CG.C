@@ -413,18 +413,12 @@ void ML_SA_CG<BasicTurbulenceModel>::run_ml_graph(double* mean_array, double* st
 
     volScalarField source_term = fvc::Sp(Cw1_*alpha*rho*fw(Stilda)*nuTilda_/sqr(y_), nuTilda_);
 
-    // Some tensorflow pointer requirements
-    //TF_Status* status_ = TF_NewStatus();
-    //TF_SessionOptions* options_ = TF_NewSessionOptions();
-    //TF_Session* sess_ = TF_NewSession(graph_, options_, status_);
-
     float** input_vals = new float*[num_cells];
 
     for(size_t i=0; i<num_cells; i++) {
         input_vals[i] = new float[num_inputs];
     }
 
-	//float input_vals[num_cells][num_inputs];
 	const std::vector<size_t> input_dims = {num_cells, num_inputs};
 
     volScalarField cx_ = this->mesh_.C().component(vector::X);
@@ -452,7 +446,7 @@ void ML_SA_CG<BasicTurbulenceModel>::run_ml_graph(double* mean_array, double* st
     // Initialize the SmartRedis client
     SmartRedis::Client client(true);
 
-    // Get the MPI rank for key generation
+    // Get the MPI rank for key creation
     int rank = 0;
     int init_flag = 0;
 
@@ -479,51 +473,11 @@ void ML_SA_CG<BasicTurbulenceModel>::run_ml_graph(double* mean_array, double* st
                          SmartRedis::TensorType::flt,
                          SmartRedis::MemoryLayout::contiguous);
 
-
-    // Set up TF C API stuff
-    //TF_Tensor* output_tensor_ = nullptr;
-    //TF_Tensor* input_tensor_ = tf_utils::CreateTensor(TF_FLOAT,
-    //                                      input_dims.data(), input_dims.size(),
-    //                                      &input_vals, num_cells*num_inputs*sizeof(float));
-
-    // Arrays of tensors
-    //TF_Tensor* input_tensors_[1] = {input_tensor_};
-    //TF_Tensor* output_tensors_[1] = {output_tensor_};
-    // Arrays of operations
-    //TF_Output inputs[1] = {input_ph_};
-    //TF_Output outputs[1] = {output_};
-
-    // We have access to this->mesh_ which is of type fvMesh
-    // Primitive mesh has a function cells() that returns a cellList
-    // This might allow us to get cell id
-    // Maybe we just do it by MPI rank?
-
-
-
-    /*
-    TF_SessionRun(sess_,
-                nullptr, // Run options.
-                inputs, input_tensors_, 1, // Input tensor ops, input tensor values, number of inputs.
-                outputs, output_tensors_, 1, // Output tensor ops, output tensor values, number of outputs.
-                nullptr, 0, // Target operations, number of targets.
-                nullptr, // Run metadata.
-                status_ // Output status.
-                );
-    */
-
-
-	//const auto data = static_cast<float*>(TF_TensorData(output_tensors_[0]));
 	for (int i = 0; i < num_cells; i++)
 	{
 		nut_ml_[i] = data[num_outputs*i]*std_array[num_inputs] + mean_array[num_inputs]; // Funnel changes back into OF - row major order
 	}
-    /*
-	tf_utils::DeleteTensor(input_tensor_);
-	tf_utils::DeleteTensor(output_tensor_);
-    TF_DeleteSessionOptions(options_);2
-    TF_DeleteStatus(status_);
-    tf_utils::DeleteSession(sess_);
-    */
+
     nut_ml_ = MyFilter_(nut_ml_);
 
     forAll(nut_ml_.internalField(), id)
