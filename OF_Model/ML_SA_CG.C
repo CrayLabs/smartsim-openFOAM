@@ -454,8 +454,10 @@ void ML_SA_CG<BasicTurbulenceModel>::run_ml_graph(double* mean_array, double* st
     if(init_flag==1)
         MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-    // Put the input tensor into the database
+    // Create a key for the tensor storage
     std::string input_key = "model_input_rank_" + std::to_string(rank);
+
+    // Put the input tensor into the database
     client.put_tensor(input_key, input_vals, input_dims,
                       SmartRedis::TensorType::flt,
                       SmartRedis::MemoryLayout::nested);
