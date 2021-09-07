@@ -1,111 +1,227 @@
 # smartsim-openFOAM
 
-This repository provides instructions, source files, and
-examples for including the SmartRedis client in
+This repository provides instructions and source files
+for an example of including the SmartRedis client in
 OpenFOAM so that OpenFOAM can leverage the machine learning,
-data analysis, and data visualization capabilities in SmartSim.
+data analysis, and data visualization capabilities of SmartSim.
 
-## Building OpenFOAM 5.x with SmartRedis
+The example in this repository adapts the
+[TensorFlowFoam](https://github.com/argonne-lcf/TensorFlowFoam)
+work which utilized a deep neural network to predict steady-state
+turbulent viscosities of the Spalart-Allmaras (SA) model.
+The example in this repository highlights that a machine learning
+model can be evaluated using SmartSim from within an OpenFOAM object
+with minimal external library code.  In this particular case,
+only four SmartRedis client API calls are needed to
+initialize a client connection,
+send tensor data for evaluation, execute the TensorFlow model,
+and retrieve the model inference result.  In the following
+sections, instructions will be given for building and running
+the aforementioned example.
 
-This section outlines the steps required to build OpenFOAM 5.x
-with SmartRedis.  OpenFOAM provides
-[installation instructions](https://develop.openfoam.com/Development/openfoam/-/blob/master/doc/Build.md)
-for various environments.  Specific instructions
-are provided herein for building OpenFOAM from source
-on a Cray XC.  If a Cray XC is not being used,
-skip ahead to [Adding SmartRedis to OpenFoam](#markdown-Adding-SmartRedis-to-OpenFOAM) after successfully
-installing OpenFOAM 5.x on your system.
+## Prerequisites
 
-### Building OpenFOAM on a Cray XC
+### OpenFOAM-5.x and ThirdParty-5.x
 
-These directions were adapted from public instructions for building OpenFOAM on the Titan supercomputer and should be applicable to a wide range of Cray systems.  However, these instructions were tested specifically on a Cray XC system.
+In this example, a deep neural network is used to predict steady-state
+turbulent viscosities of the Spalart-Allmaras (SA) model.  The
+evaluation of the deep neural network is incorporated into OpenFOAM
+via a custom turbulence model that is dynamically linked to the
+simulation.  As a result, the base OpenFOAM-5.x and ThirdParty-5.x
+applications can be built using typical build instructions.  However,
+in the case that a system (e.g. Cray XC) is being used that is
+not listed in the OpenFOAM make options, check the ``README`` of the
+``builds`` directory of this repository for custom build instructions
+and files.
 
-If the ``PrgEnv-cray`` module is loaded by default on your Cray XC system, execute:
+### SmartSim and SmartRedis
 
-``` bash
-module swap PrgEnv-cray PrgEnv-gnu
+An installation of SmartSim is required to run this example.
+SmartSim can be installed via ``pip`` or from source using the public
+[installation instructions](https://www.craylabs.org/docs/installation.html#smartsim).
+
+An installation of SmartRedis is also required to run this example.
+The SmartRedis Python client, which is used in the ``driver.py`` file
+to place the machine learning model in SmartSim orchestrator, can
+be installed via ``pip`` or as an editable install from source using
+the public
+[installation instructions](https://www.craylabs.org/docs/installation.html#smartredis).
+The SmartRedis C++ client library is also required and can be built and installed
+using the public
+[installation instructions](https://www.craylabs.org/docs/installation.html#smartredis).
+
+## Building SimpleFoam_ML
+
+As part of the [TensorFlowFoam](https://github.com/argonne-lcf/TensorFlowFoam)
+work, the OpenFOAM program ``simpleFoam_ML`` was written to
+call a custom turbulence model that utilizies a TensorFlow model
+at the beginning of the simulation and then the turbulent
+eddy-viscosity is held constant for the rest of the simulation.
+In this example, ``simpleFoam_ML`` is also used. To build
+the ``simpleFoam_ML`` executable, execute the following commands:
+
+```bash
+cd /path/to/OpenFOAM-5.x
+source etc/bashrc
+cd /path/to/smartsim-openFOAM/simpleFoam_ML
+wclean && wmake
 ```
 
-Now, clone the OpenFOAM-5.x, OpenFOAM ThirdParty-5.x, and smartsim-openFOAM repositories in
-the same top-level directory:
+The executable for SimpleFoam_ML
+will be installed in a subdirectory of the
+directory referenced by the environment variable
+``FOAM_APPBIN``.  This location can be changed
+by editing the ``EXE`` variable in
+the ``simpleFoam_ML/Make/files`` file.
 
-```
-git clone https://github.com/OpenFOAM/OpenFOAM-5.x.git
-git clone https://github.com/OpenFOAM/ThirdParty-5.x.git
-git clone https://github.com/CrayLabs/smartsim-openFOAM
-```
+Before proceeding, verify that the ``simpleFoam_ML`` executable
+exists in the aformentioned directory.
 
-Copy the Cray XC build rules provided in smartsim-openFOAM to the
-OpenFOAM-5.x build rules directory:
+## Building An OpenFOAM turbulence model with SmartRedis
 
-```
-mkdir OpenFOAM-5.x/wmake/rules/crayxcGcc
-```
-```
-cp -r smartsim-openFOAM/builds/cray_xc/rules/ OpenFOAM-5.x/wmake/rules/crayxcGcc/
-```
+The TensorFlow machine learning model is incorporated into the OpenFOAM
+simulation via a custom turbulence model built as a dynamic library.
+The directory ``OF_Model`` in this repository contains the source files
+for the custom turbulence model and the files needed to build the
+associated dynamic library.  These files have been adapted from the
+[TensorFlowFoam](https://github.com/argonne-lcf/TensorFlowFoam)
+``OF_Model``.
 
-Now that there are build rules for the Cray XC system, modify ``OpenFOAM-5.x/etc/bashrc`` to specify ``cray`` for ``WM_ARCH_OPTION``:
+To build the dynamic library, execute the following commands:
 
-```
-# Locate WM_ARCH_OPTION in OpenFOAM-5.x/etc/bashrc and set to "cray"
-WM_ARCH_OPTION=cray
-```
-
-Also, the MPI library rules contained in the XC rules must be specified in the ``OpenFOAM-5.x/etc/bashrc`` file.  Locate ``WM_MPLIB`` and set to ``MPICH2``:
-
-```
-# Locate WM_MPLIB in OpenFOAM-5.x/etc/bashrc and set to "MPICH2"
-WM_MPLIB=MPICH2
+```bash
+export SMARTREDIS_PATH=path/to/SmartRedis
+cd /path/to/OpenFOAM-5.x
+source etc/bashrc
+cd /path/to/smartsim-openFOAM/OF_Model
+wmake libso .
 ```
 
-Cray specific compiler options need to be added to ``OpenFOAM-5.x/etc/config.sh/settings``. These options are shown in the block below, and ``smartsim-openFOAM/builds/cray_xc/settings`` shows the proper placement of these options.
+Note that the environment variable ``SMARTREDIS_PATH`` is used
+to locate the ``SmartRedis`` include and install directories
+and should point to the top level ``SmartRedis`` directory.
 
-```
-# Add these Cray compiler settings to OpenFOAM-5.x/etc/config.sh/settings
-cray)
-    WM_ARCH=crayxc
-    export WM_COMPILER_LIB_ARCH=64
-    export WM_CC='cc'
-    export WM_CXX='CC'
-    export WM_CFLAGS='-fPIC'
-    export WM_CXXFLAGS='-fPIC'
-    ;;
-```
+The dynamic library for the custom turbulence model
+will be installed in a subdirectory of the
+directory referenced by the environment variable
+``FOAM_USER_LIBBIN``.  This location can be changed
+by editing the ``LIB`` variable in
+the ``OF_Model/Make/files`` file.
 
-Cray MPI settings need to be added to ``OpenFOAM-5.x/etc/config.sh/mpi``. These options are shown in the block below, and ``smartsim-openFOAM/builds/cray_xc/mpi`` shows the proper placement of these options.  Verify that your current environment has ``$MPICH_DIR`` set to the correct path.  If not, this ``MPICH_DIR`` should be set to the MPICH install directory.
+Before proceeding, verify that the ``ML_SA_CG.so`` file
+exists in the aformentioned directory.
 
-```
-# Add these Cray MPI settings to OpenFOAM-5.x/etc/config.sh/mpi
-MPICH2)
-    export FOAM_MPI=mpich2
-    export MPI_ARCH_PATH=$MPICH_DIR
-    ;;
-```
+### Adding SmartRedis to OpenFOAM for TensorFlow inference
 
-The OpenFOAM build environment can now be set up with:
+In the above text, a description of how to build the
+OpenFOAM library with the SmartRedis client was
+described.  In this section, a brief description
+of the ``SmartRedis`` code that was added to
+OpenFOAM is described.
 
-```
-cd OpenFOAM-5.x && source etc/bashrc && cd ..
-```
+Aside from the addition of an include statement in
+``ML_SA_CG.H``, all of the ``SmartRedis``
+content is in ``ML_SA_CG.C``.
 
-Before OpenFOAM can be built, third-party dependencies need to be built.  To build these dependencies on the Cray XC, copy the build settings provided in ``smartsim-openFOAM`` to ``ThirdParty-5.x``:
+In line 447 of ``ML_SA_GC.C``, the ``SmartRedis``
+client is initialized to utilize a ``SmartSim``
+``Orchestrator`` in cluster configuration.  To
+use to a non-cluster ``Orchestrator``,
+simply change the boolean input to the constructor
+to false.
 
-```
-cp smartsim-openFOAM/builds/cray_xc/Makefile.inc.i686_pc_linux2.shlib-OpenFOAM ThirdParty-5.x/etc/wmakeFiles/scotch/
-```
-
-Now, build the OpenFOAM third-party dependencies:
-
-```
-cd ThirdParty-5.x && ./Allwmake -j 8 && cd..
+```c++
+  // Initialize the SmartRedis client
+  SmartRedis::Client client(true);
 ```
 
-OpenFOAM can now be built:
+In line 449 through line 458, a key is contructed
+for the tensor that will be sent to the database.
+This logic creates the tensor key ``model_input_rank_``
+that is suffixed by the MPI rank if the
+``MPI_COMM_WORLD`` has been initialized.  Using
+the MPI rank as a suffix is a simple and convenient
+way to prevent key collisions in a parallel application.
 
+
+```c++
+    // Get the MPI rank for key creation
+    int rank = 0;
+    int init_flag = 0;
+
+    MPI_Initialized(&init_flag);
+    if(init_flag==1)
+        MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+    // Create a key for the tensor storage
+    std::string input_key = "model_input_rank_" + std::to_string(rank);
 ```
-cd OpenFOAM-5.x && ./Allwmake -j 8 && cd..
+
+In line 460, the tensor is put into the ``SmartSim`` ``Orchestrator``
+using the ``put_tensor()`` API call.  The ``input_vals`` variable
+is a tensor that contains the velocity, position, and step height
+for each point in the mesh.  The ``input_dims`` is a vector
+containing the ``input_vals`` dimensions.  Finally, the
+last two variable inputs to ``put_tensor()`` indicate the data
+type and memory layout associated with the ``input_vals`` variable.
+
+```c++
+    // Put the input tensor into the database
+    client.put_tensor(input_key, input_vals, input_dims,
+                      SmartRedis::TensorType::flt,
+                      SmartRedis::MemoryLayout::nested);
 ```
 
+In line 466 through 469, a key is constructed for the
+tensor output of the ML model, and the TensorFlow model
+that is stored in the database is executed.
 
-### Adding SmartRedis to OpenFOAM
+```c++
+    // Run the model
+    std::string model_key = "ml_sa_cg_model";
+    std::string output_key = "model_output_rank_" + std::to_string(rank);
+    client.run_model(model_key, {input_key}, {output_key});
+```
+
+Finally, in line 473, the tensor output of the
+TensorFlow model is retrieved and stored in a vector
+named ``data``.  The API function ``unpack_tensor()``
+is used to place the tensor output data into an
+existing block of memory, whereas the API function
+``get_tensor()`` can be used to place the results
+into a block of memory managed by the ``SmartRedis``
+client.  Following the retrieval of the
+TensorFlow model ouptut tensor, the data can
+then be used in OpenFOAM simulation.
+
+```c++
+    // Get the output tensor
+    std::vector<float> data(num_cells, 0.0);
+    client.unpack_tensor(output_key, data.data(),
+                         {num_cells},
+                         SmartRedis::TensorType::flt,
+                         SmartRedis::MemoryLayout::contiguous);
+```
+
+## Running OpenFOAM with SmartSim
+
+A ``SmartSim`` script is provided in this repository
+to execute the OpenFOAM case with the TensorFlow model.
+To run the ``SmartSim`` script, execute the following
+commands in the Python environment that contains the
+``SmartSim`` and the ``SmartRedis`` packages.
+
+```bash
+cd /path/to/OpenFOAM-5.x
+source etc/bashrc
+cd /path/to/smartsim-openFOAM/inference
+python drivery.py
+```
+
+The aforementioned ``SmartSim`` script will
+deploy a ``SmartSim`` ``Orchestrator``
+and run the OpenFOAM simulation.  Currently,
+the script is built for ``slurm`` based systems
+but can be easily adpated to other machines.
+The results of the simulation will be in
+the experiment directory ``openfoam_ml``.
