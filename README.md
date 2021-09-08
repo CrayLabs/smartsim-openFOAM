@@ -207,6 +207,17 @@ then be used in OpenFOAM simulation.
 
 A ``SmartSim`` script is provided in this repository
 to execute the OpenFOAM case with the TensorFlow model.
+Before executing the script, the following updates
+to the simulation files must be made:
+
+1.  In ``smartsim-openFOAM/sim_inputs/pitzDaily_ML/Allrun``
+    update the ``/path/to/openfoam`` to the actual
+    path to the OpenFOAM top level directory.
+2.  In ``smartsim-openFOAM/sim_inputs/pitzDaily_ML/controlDict``
+    update the ``/path/to/openfoam/user/directory/`` to
+    the actual path of the OpenFOAM user directory that
+    contains ``ML_SA_CG.so``
+
 To run the ``SmartSim`` script, execute the following
 commands in the Python environment that contains the
 ``SmartSim`` and the ``SmartRedis`` packages.
