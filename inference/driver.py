@@ -2,9 +2,34 @@ from smartsim.settings import SrunSettings
 from smartsim.database import SlurmOrchestrator
 from smartsim import Experiment, slurm, constants
 from smartredis import Client
+from os import environ, getcwd
 import time
 
 exp = Experiment(name="openfoam_ml", launcher="slurm")
+
+def get_openfoam_env_vars():
+    """Return the environment variables for OpenFOAM
+
+    This function returns the environment variables
+    in the current environment that are related to
+    OpenFOAM
+
+    :return: dictionary of environment variables
+    :rtype: dict with key str and value str
+    """
+
+    env_vars = {}
+    for key, val in environ.items():
+        if len(key)>2 and "WM_" in key[0:3]:
+            env_vars[key] = val
+        if len(key)>4 and "FOAM_" in key[0:5]:
+            env_vars[key] = val
+        if key == "MPI_BUFFER_SIZE":
+            env_vars[key] = val
+        if key == "MPI_ARCH_INC":
+            env_vars[key] = val
+
+    return env_vars
 
 def start_database(port, nodes, cpus, tpq):
     """Create and start the Redis database for the scaling test
@@ -51,6 +76,7 @@ def set_model(model_file, device, batch_size, address, cluster):
     """
 
     client = Client(address=address, cluster=cluster)
+    time.sleep(10)
     client.set_model_from_file("ml_sa_cg_model",
                                 model_file,
                                 "TF",
@@ -72,7 +98,7 @@ if __name__ == "__main__":
     # Simulation settings
     sim_node_count = 1
     sim_dir = "../sim_inputs/pitzDaily_ML/"
-    sim_tasks_per_node = 1
+    sim_tasks_per_node = 16
 
     # Model settings
     model_file = "ML_SA_CG.pb"
@@ -95,19 +121,61 @@ if __name__ == "__main__":
                                       options={"exclusive": None,
                                                "job-name": "openfoam"})
 
-    # Set the Slurm srun settings
-    srun = SrunSettings("bash", exe_args="./Allrun", alloc=allocation)
-    srun.set_nodes(sim_node_count)
-    srun.set_tasks_per_node(sim_tasks_per_node)
+    # Retrieve OpenFOAM environment variables for execution
+    foam_env_vars = get_openfoam_env_vars()
 
-    # Create the OpenFOAM simulation model
-    model = exp.create_model("openfoam", srun)
+    # Create the run settings for the mesh decomposition
+
+    decomp_srun = SrunSettings(exe = environ['FOAM_APPBIN'] + "/decomposePar",
+                               env_vars = foam_env_vars,
+                               alloc = allocation)
+    decomp_srun.set_nodes(1)
+    decomp_srun.set_tasks(1)
+
+    # Create a SmartSim model that will copy simulation files
+    # and then preprocess the mesh for parallel runs
+    decomp_model = exp.create_model("openfoam", decomp_srun)
 
     # Set the model to copy input files
-    model.attach_generator_files(to_copy=[sim_dir])
+    decomp_model.attach_generator_files(to_copy=[sim_dir])
 
     # Generate the experiment directory
-    exp.generate(model, overwrite=True)
+    exp.generate(decomp_model, overwrite=True)
 
-    # Run the openFOAM simulation
-    exp.start(model)
+    # Run the openFOAM parallel decomposition
+    exp.start(decomp_model)
+
+    # Definte the simulation directory based on the
+    # experiment name and the previous model name used
+    exp_dir = getcwd() + '/openfoam_ml/openfoam'
+
+    # Create the run settings for the simulation model
+    openfoam_srun = SrunSettings(environ['FOAM_APPBIN'] + "/simpleFoam_ML",
+                                 exe_args = "-parallel",
+                                 env_vars = foam_env_vars,
+                                 alloc = allocation)
+    openfoam_srun.set_nodes(sim_node_count)
+    openfoam_srun.set_tasks(sim_tasks_per_node)
+
+    # Create the simulation model
+    openfoam_model = exp.create_model("openfoam_sim", openfoam_srun, path=exp_dir)
+
+    # Start teh simulation model
+    exp.start(openfoam_model)
+
+    # Create the run settings for recombining
+    recon_srun = SrunSettings(exe = environ['FOAM_APPBIN'] + "/reconstructPar",
+                               env_vars = foam_env_vars,
+                               alloc = allocation)
+    recon_srun.set_nodes(1)
+    recon_srun.set_tasks(1)
+
+    # Create the reconstruction model
+    openfoam_recon = exp.create_model("openfoam_recon", recon_srun, path=exp_dir)
+
+    # Start the reconstrucion model
+    exp.start(openfoam_recon)
+
+
+
+
