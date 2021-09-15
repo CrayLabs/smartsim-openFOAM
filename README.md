@@ -220,17 +220,20 @@ to the simulation files must be made:
 
 To run the ``SmartSim`` script, execute the following
 commands in the Python environment that contains the
-``SmartSim`` and the ``SmartRedis`` packages.
+``SmartSim`` and the ``SmartRedis`` packages.  Replace
+the ``path/to/SmartRedis`` in the command before with the actual path to SmartRedis.
 
 ```bash
 cd /path/to/OpenFOAM-5.x
 source etc/bashrc
-cd /path/to/smartsim-openFOAM/inference
+export LD_LIBRARY_PATH=/path/to/SmartRedis/install/lib:$FOAM_USER_LIBBIN:$FOAM_LIBBIN:$LD_LIBRARY_PATH
+cd /path/to/smartsim-openFOAM/
 python drivery.py
 ```
 
 The aforementioned ``SmartSim`` script will
-deploy a ``SmartSim`` ``Orchestrator``
+deploy a ``SmartSim`` ``Orchestrator``,
+train the machine learning model,
 and run the OpenFOAM simulation.  Currently,
 the script is built for ``slurm`` based systems
 but can be easily adpated to other machines.
