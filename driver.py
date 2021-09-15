@@ -59,6 +59,42 @@ def start_database(port, nodes, cpus, tpq):
     exp.start(db)
     return db
 
+def run_training(alloc, training_dir, training_node_count,
+                 training_tasks_per_node):
+    """Run the TensorFlow training script
+
+    :param alloc: The allocation on which to run
+    :type alloc: str
+    :param training_dir: The directory where the training
+                         script and training data are located
+    :type training_dir: str
+    :param training_node_count: The number of compute nodes
+                                to use for the simulation
+    :type training_node_count: int
+    :param training_tasks_per_node: The number of tasks
+                                    per compute node
+    :type training_tasks_per_node: int
+    """
+
+    # Create the run settings for the training script
+    training_srun = SrunSettings(exe = "python",
+                                 exe_args = "ML_Model.py",
+                                 alloc = alloc)
+    training_srun.set_nodes(training_node_count)
+    training_srun.set_tasks(training_tasks_per_node)
+
+    # Create a SmartSim model that will execute the training model
+    training_model = exp.create_model("training", training_srun)
+
+    # Set the model to copy input files
+    training_model.attach_generator_files(to_copy=[training_dir])
+
+    # Generate the experiment directory
+    exp.generate(training_model, overwrite=True)
+
+    # Run the openFOAM parallel decomposition
+    exp.start(training_model)
+
 def set_model(model_file, device, batch_size, address, cluster):
     """Set the Tensorflow openFOAM ML model in the orchestrator
 
@@ -84,8 +120,8 @@ def set_model(model_file, device, batch_size, address, cluster):
                                 batch_size,
                                 0,
                                 "v0.0",
-                                ["input_placeholder"],
-                                ["output_value/BiasAdd"])
+                                ["x"],
+                                ["Identity"])
 
 def run_decomposition(alloc, foam_env_vars, sim_dir):
     """Run the decomposition step to be be able to run
@@ -183,6 +219,42 @@ def run_reconstruction(alloc, foam_env_vars):
     # Start the reconstrucion model
     exp.start(openfoam_recon)
 
+def run_serial_simulation(alloc, foam_env_vars, sim_dir):
+    """Run a serial version of the openFOAM simulation
+
+    :param alloc: The allocation on which to run
+    :type alloc: str
+    :param foam_env_vars: Environment variables needed
+                          to run openFOAM
+    :type foam_env_vars: dict of str keys and str values
+    :param sim_dir: The directory where input files are
+                    located
+    :type sim_dir: str
+    """
+
+    # Definte the simulation directory based on the
+    # experiment name and the previous model name used
+    exp_dir = getcwd() + '/openfoam_ml/openfoam'
+
+    # Create the run settings for the simulation model
+    openfoam_srun = SrunSettings(foam_env_vars['FOAM_APPBIN'] + "/simpleFoam_ML",
+                                 env_vars = foam_env_vars,
+                                 alloc = allocation)
+    openfoam_srun.set_nodes(1)
+    openfoam_srun.set_tasks(1)
+
+    # Create the simulation model
+    openfoam_model = exp.create_model("openfoam_sim", openfoam_srun, path=exp_dir)
+
+    # Set the model to copy input files
+    openfoam_model.attach_generator_files(to_copy=[sim_dir])
+
+    # Generate the experiment directory
+    exp.generate(openfoam_model, overwrite=True)
+
+    # Start teh simulation model
+    exp.start(openfoam_model)
+
 if __name__ == "__main__":
 
     # Orchestrator settings
@@ -193,11 +265,16 @@ if __name__ == "__main__":
 
     # Simulation settings
     sim_node_count = 1
-    sim_dir = "../sim_inputs/pitzDaily_ML/"
-    sim_tasks_per_node = 16
+    sim_dir = "./sim_inputs/pitzDaily_ML/"
+    sim_tasks_per_node = 1
+
+    # Training settings
+    training_node_count = 1
+    training_dir = "./training"
+    training_tasks_per_node = 1
 
     # Model settings
-    model_file = "ML_SA_CG.pb"
+    model_file = "./openfoam_ml/training/ML_SA_CG.pb"
     device = "CPU"
     batch_size = 1
 
@@ -208,26 +285,38 @@ if __name__ == "__main__":
     # the ML model into the database
     address = db.get_address()[0]
 
-    # Set the model into the database
-    set_model(model_file, device, batch_size, address, bool(db_node_count>1))
-
     # Retrieve OpenFOAM environment variables for execution
     foam_env_vars = get_openfoam_env_vars()
 
     # Get simulation allocation
-    allocation = slurm.get_allocation(nodes=sim_node_count,
+    total_nodes = max(sim_node_count, training_node_count)
+    allocation = slurm.get_allocation(nodes=total_nodes,
                                       time="10:00:00",
                                       options={"exclusive": None,
                                                "job-name": "openfoam"})
 
-    # Run the decomposition step for a parallel run
-    run_decomposition(allocation, foam_env_vars, sim_dir)
+    # Train ML model
+    #run_training(allocation, training_dir,
+    #             training_node_count,
+    #             training_tasks_per_node)
 
-    # Run the openFOAM simulation
-    run_simulation(allocation, foam_env_vars, sim_node_count, sim_tasks_per_node)
+    # Set the trained model into the database
+    set_model(model_file, device, batch_size, address, bool(db_node_count>1))
 
-    # Reconstruct the results from a parallel run
-    run_reconstruction(allocation, foam_env_vars)
+    # Run parallel OpenFOAM if resources are sufficient
+    if sim_tasks_per_node > 1 or sim_node_count > 1:
+        # Run the decomposition step for a parallel run
+        run_decomposition(allocation, foam_env_vars, sim_dir)
+
+        # Run the openFOAM simulation
+        run_simulation(allocation, foam_env_vars,
+                    sim_node_count, sim_tasks_per_node)
+
+        # Reconstruct the results from a parallel run
+        run_reconstruction(allocation, foam_env_vars)
+    else:
+        # Run a serial version of the simulation
+        run_serial_simulation(allocation, foam_env_vars, sim_dir)
 
 
 
