@@ -296,9 +296,9 @@ if __name__ == "__main__":
                                                "job-name": "openfoam"})
 
     # Train ML model
-    #run_training(allocation, training_dir,
-    #             training_node_count,
-    #             training_tasks_per_node)
+    run_training(allocation, training_dir,
+                 training_node_count,
+                 training_tasks_per_node)
 
     # Set the trained model into the database
     set_model(model_file, device, batch_size, address, bool(db_node_count>1))
