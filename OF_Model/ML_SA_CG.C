@@ -444,7 +444,7 @@ void ML_SA_CG<BasicTurbulenceModel>::run_ml_graph(double* mean_array, double* st
     }
 
     // Initialize the SmartRedis client
-    SmartRedis::Client client(true);
+    SmartRedis::Client client(false);
 
     // Get the MPI rank for key creation
     int rank = 0;
