@@ -249,9 +249,14 @@ def run_simulation(alloc, foam_env_vars, sim_node_count,
     # Store the executable as a variable
     executable = foam_env_vars['FOAM_APPBIN'] + "/simpleFoam_ML"
 
+    # Set exec args to "-parallel" if needed
+    exe_args = None
+    if(sim_node_count*sim_tasks_per_node>1):
+        exe_args = "-parallel"
+
     # Create the run settings for the simulation model
     openfoam_srun = SrunSettings(exe = executable,
-                                 exe_args = "-parallel",
+                                 exe_args = exe_args,
                                  env_vars = foam_env_vars,
                                  alloc = allocation)
     openfoam_srun.set_nodes(sim_node_count)
@@ -375,7 +380,6 @@ if __name__ == "__main__":
                  training_tasks_per_node)
 
     # Set the trained model into the database
-    time.sleep(10)
     set_model(model_file, device, batch_size, address, bool(db_node_count>1))
 
     # Run decomposition for parallel execution
