@@ -77,6 +77,19 @@ the ``simpleFoam_ML/Make/files`` file.
 Before proceeding, verify that the ``simpleFoam_ML`` executable
 exists in the aformentioned directory.
 
+## Building a custom turbulence model for data generation
+
+The OpenFOAM cases with varying step heights that are used to generate training data utilize a custom turbulence model.  To build this turbulence model, execute the following commands:
+
+```bash
+cd /path/to/OpenFOAM-5.x
+source etc/bashrc
+cd /path/to/smartsim-openFOAM/data_generation/Data_Generation_Model
+wmake .
+```
+
+After executing these commands, verify that ``SA_Detailed.so`` is in ``$FOAM_USER_LIBBIN``.
+
 ## Building An OpenFOAM turbulence model with SmartRedis
 
 The TensorFlow machine learning model is incorporated into the OpenFOAM

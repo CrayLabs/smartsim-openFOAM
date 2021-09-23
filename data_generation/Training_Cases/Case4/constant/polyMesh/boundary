@@ -1,0 +1,76 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  5.x                                   |
+|   \\  /    A nd           | Web:      www.OpenFOAM.org                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       polyBoundaryMesh;
+    location    "constant/polyMesh";
+    object      boundary;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+8
+(
+    inlet
+    {
+        type            patch;
+        nFaces          78;
+        startFace       267700;
+    }
+    outlet
+    {
+        type            patch;
+        nFaces          140;
+        startFace       267778;
+    }
+    lowerWallStartup
+    {
+        type            symmetryPlane;
+        inGroups        1(symmetryPlane);
+        nFaces          100;
+        startFace       267918;
+    }
+    upperWallStartup
+    {
+        type            symmetryPlane;
+        inGroups        1(symmetryPlane);
+        nFaces          100;
+        startFace       268018;
+    }
+    upperWall
+    {
+        type            wall;
+        inGroups        1(wall);
+        nFaces          1356;
+        startFace       268118;
+    }
+    lowerWall
+    {
+        type            wall;
+        inGroups        1(wall);
+        nFaces          1418;
+        startFace       269474;
+    }
+    back
+    {
+        type            empty;
+        inGroups        1(empty);
+        nFaces          134648;
+        startFace       270892;
+    }
+    front
+    {
+        type            empty;
+        inGroups        1(empty);
+        nFaces          134648;
+        startFace       405540;
+    }
+)
+
+// ************************************************************************* //
