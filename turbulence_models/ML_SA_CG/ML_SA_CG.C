@@ -443,37 +443,42 @@ void ML_SA_CG<BasicTurbulenceModel>::run_ml_graph(double* mean_array, double* st
         input_vals[id][4] = i5;
     }
 
-    // Initialize the SmartRedis client
-    SmartRedis::Client client(false);
-
-    // Get the MPI rank for key creation
-    int rank = 0;
-    int init_flag = 0;
-
-    MPI_Initialized(&init_flag);
-    if(init_flag==1)
-        MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-
-    // Create a key for the tensor storage
-    std::string input_key = "model_input_rank_" + std::to_string(rank);
-
-    // Put the input tensor into the database
-    client.put_tensor(input_key, input_vals, input_dims,
-                      SmartRedis::TensorType::flt,
-                      SmartRedis::MemoryLayout::nested);
-
-
-    // Run the model
-    std::string model_key = "ml_sa_cg_model";
-    std::string output_key = "model_output_rank_" + std::to_string(rank);
-    client.run_model(model_key, {input_key}, {output_key});
-
-    // Get the output tensor
+    // Only execute machine learning model if num_cells > 0
     std::vector<float> data(num_cells, 0.0);
-    client.unpack_tensor(output_key, data.data(),
-                         {num_cells},
-                         SmartRedis::TensorType::flt,
-                         SmartRedis::MemoryLayout::contiguous);
+
+    if(num_cells > 0) {
+
+        // Initialize the SmartRedis client
+        SmartRedis::Client client(false);
+
+        // Get the MPI rank for key creation
+        int rank = 0;
+        int init_flag = 0;
+
+        MPI_Initialized(&init_flag);
+        if(init_flag==1)
+            MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+        // Create a key for the tensor storage
+        std::string input_key = "model_input_rank_" + std::to_string(rank);
+
+        // Put the input tensor into the database
+        client.put_tensor(input_key, input_vals, input_dims,
+                        SmartRedis::TensorType::flt,
+                        SmartRedis::MemoryLayout::nested);
+
+
+        // Run the model
+        std::string model_key = "ml_sa_cg_model";
+        std::string output_key = "model_output_rank_" + std::to_string(rank);
+        client.run_model(model_key, {input_key}, {output_key});
+
+        // Get the output tensor
+        client.unpack_tensor(output_key, data.data(),
+                            {num_cells},
+                            SmartRedis::TensorType::flt,
+                            SmartRedis::MemoryLayout::contiguous);
+    }
 
 	for (int i = 0; i < num_cells; i++)
 	{
