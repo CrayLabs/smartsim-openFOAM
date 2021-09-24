@@ -50,7 +50,7 @@ The SmartRedis C++ client library is also required and can be built and installe
 using the public
 [installation instructions](https://www.craylabs.org/docs/installation.html#smartredis).
 
-## Building SimpleFoam_ML
+### SimpleFoam_ML
 
 As part of the [TensorFlowFoam](https://github.com/argonne-lcf/TensorFlowFoam)
 work, the OpenFOAM program ``simpleFoam_ML`` was written to
@@ -77,24 +77,25 @@ the ``simpleFoam_ML/Make/files`` file.
 Before proceeding, verify that the ``simpleFoam_ML`` executable
 exists in the aformentioned directory.
 
-## Building a custom turbulence model for data generation
+### SA_Detailed turbulence model
 
-The OpenFOAM cases with varying step heights that are used to generate training data utilize a custom turbulence model.  To build this turbulence model, execute the following commands:
+The OpenFOAM cases that are used to generate training data utilize a custom turbulence model for enhanced data output.  To build this turbulence model, execute the following commands:
 
 ```bash
 cd /path/to/OpenFOAM-5.x
 source etc/bashrc
-cd /path/to/smartsim-openFOAM/data_generation/Data_Generation_Model
+cd /path/to/smartsim-openFOAM/turbulence_models/SA_Detailed
 wmake .
 ```
 
 After executing these commands, verify that ``SA_Detailed.so`` is in ``$FOAM_USER_LIBBIN``.
 
-## Building An OpenFOAM turbulence model with SmartRedis
+### ML_SA_CG turbulence model with SmartRedis
 
 The TensorFlow machine learning model is incorporated into the OpenFOAM
 simulation via a custom turbulence model built as a dynamic library.
-The directory ``OF_Model`` in this repository contains the source files
+The directory ``turbulence_models/ML_SA_CG`` in this repository
+contains the source files
 for the custom turbulence model and the files needed to build the
 associated dynamic library.  These files have been adapted from the
 [TensorFlowFoam](https://github.com/argonne-lcf/TensorFlowFoam)
@@ -106,7 +107,7 @@ To build the dynamic library, execute the following commands:
 export SMARTREDIS_PATH=path/to/SmartRedis
 cd /path/to/OpenFOAM-5.x
 source etc/bashrc
-cd /path/to/smartsim-openFOAM/OF_Model
+cd /path/to/smartsim-openFOAM/turbulence_models/ML_SA_CG
 wmake libso .
 ```
 
@@ -124,7 +125,7 @@ the ``OF_Model/Make/files`` file.
 Before proceeding, verify that the ``ML_SA_CG.so`` file
 exists in the aformentioned directory.
 
-### Adding SmartRedis to OpenFOAM for TensorFlow inference
+#### Adding SmartRedis to OpenFOAM for TensorFlow inference
 
 In the above text, a description of how to build the
 OpenFOAM library with the SmartRedis client was
@@ -220,35 +221,26 @@ then be used in OpenFOAM simulation.
 
 A ``SmartSim`` script is provided in this repository
 to execute the OpenFOAM case with the TensorFlow model.
-Before executing the script, the following updates
-to the simulation files must be made:
-
-1.  In ``smartsim-openFOAM/sim_inputs/pitzDaily_ML/Allrun``
-    update the ``/path/to/openfoam`` to the actual
-    path to the OpenFOAM top level directory.
-2.  In ``smartsim-openFOAM/sim_inputs/pitzDaily_ML/controlDict``
-    update the ``/path/to/openfoam/user/directory/`` to
-    the actual path of the OpenFOAM user directory that
-    contains ``ML_SA_CG.so``
-
 To run the ``SmartSim`` script, execute the following
 commands in the Python environment that contains the
 ``SmartSim`` and the ``SmartRedis`` packages.  Replace
-the ``path/to/SmartRedis`` in the command before with the actual path to SmartRedis.
+the ``path/to/SmartRedis`` in the command before with the
+actual path to SmartRedis.
 
 ```bash
 cd /path/to/OpenFOAM-5.x
 source etc/bashrc
-export LD_LIBRARY_PATH=/path/to/SmartRedis/install/lib:$FOAM_USER_LIBBIN:$FOAM_LIBBIN:$LD_LIBRARY_PATH
+export SMARTREDIS_LIB_PATH=path/to/SmartRedis/install/lib
+export $SMARTREDIS_LIB_PATH:$FOAM_USER_LIBBIN:$FOAM_LIBBIN:$LD_LIBRARY_PATH
 cd /path/to/smartsim-openFOAM/
 python drivery.py
 ```
 
 The aforementioned ``SmartSim`` script will
 deploy a ``SmartSim`` ``Orchestrator``,
-train the machine learning model,
-and run the OpenFOAM simulation.  Currently,
-the script is built for ``slurm`` based systems
-but can be easily adpated to other machines.
-The results of the simulation will be in
-the experiment directory ``openfoam_ml``.
+generate training data, train the machine
+learning model, and run the OpenFOAM simulation.
+Currently, the script is built for ``slurm``
+based systems but can be easily adpated
+to other machines. The results of the simulation
+will be in the experiment directory ``openfoam_ml``.

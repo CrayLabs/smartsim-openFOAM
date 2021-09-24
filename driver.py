@@ -553,13 +553,13 @@ if __name__ == "__main__":
 
     # Data generation settings
     gen_node_count = 12
-    gen_input_dir = "./data_generation/Training_Cases/"
+    gen_input_dir = "./data_generation/"
     gen_tasks_per_node = 30
     gen_name = "data_generation"
 
     # Simulation settings
     sim_node_count = 1
-    sim_input_dir = "./sim_inputs/pitzDaily_ML/"
+    sim_input_dir = "./simulation_inputs/"
     sim_tasks_per_node = 30
 
     # Training settings
@@ -593,6 +593,7 @@ if __name__ == "__main__":
                                       time="10:00:00",
                                       options={"exclusive": None,
                                                "job-name": "openfoam"})
+    """
     # Generate the data generation input files
     generate_data_gen_files(gen_node_count, gen_tasks_per_node,
                             gen_input_dir, gen_name)
@@ -619,7 +620,7 @@ if __name__ == "__main__":
     run_training(allocation, training_dir,
                  training_node_count,
                  training_tasks_per_node, gen_dir)
-
+    """
     # Set the trained model into the database
     set_model(model_file, device, batch_size, address,
               bool(db_node_count>1))
