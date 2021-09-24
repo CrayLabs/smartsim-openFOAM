@@ -133,6 +133,7 @@ def run_reconstruction(alloc, foam_env_vars, dir,
     exp.start(openfoam_recon, block=block)
 
 def generate_data_gen_files(node_count, tasks_per_node,
+                            node_per_case,
                             input_dir, name):
     """Generate the OpenFOAM cases used for training data
 
@@ -142,6 +143,9 @@ def generate_data_gen_files(node_count, tasks_per_node,
     :param tasks_per_node: The number of tasks
                            per compute node
     :type tasks_per_node: int
+    :param node_per_case: The number of nodes to
+                           use per data generation case
+    :type node_per_case: int
     :param input_dir: The directory where the cases
                       (i.e. Case1, Case2, Case3..)
                       are located
@@ -153,7 +157,7 @@ def generate_data_gen_files(node_count, tasks_per_node,
     # Calculate the closest near-square values of n_proc
     # In the worst case, 1 x n_proc will be used for
     # decomposition
-    n_proc = tasks_per_node
+    n_proc = tasks_per_node * node_per_case
 
     big = math.ceil(math.sqrt(n_proc))
     small = math.floor(n_proc/big)
@@ -230,7 +234,7 @@ def run_data_gen_decomposition(alloc, foam_env_vars, dir):
     exp.poll()
 
 def run_data_generation(alloc, foam_env_vars, node_count,
-                        tasks_per_node, gen_dir):
+                        tasks_per_node, node_per_case, gen_dir):
     """Run the openFOAM data generation simulations
 
     :param alloc: The allocation on which to run
@@ -242,6 +246,9 @@ def run_data_generation(alloc, foam_env_vars, node_count,
     :type node_count: int
     :param tasks_per_node: The number of tasks per compute node
     :type tasks_per_node: int
+    :param node_per_case: The number of nodes to
+                           use per data generation case
+    :type node_per_case: int
     :param gen_dir: The directory where the generated
                     cases are located (i.e. Case1, Case2, etc..)
     :type gen_dir: str
@@ -260,8 +267,8 @@ def run_data_generation(alloc, foam_env_vars, node_count,
                             exe_args = exe_args,
                             env_vars = foam_env_vars,
                             alloc = allocation)
-        srun.set_nodes(1)
-        srun.set_tasks(tasks_per_node)
+        srun.set_nodes(node_per_case)
+        srun.set_tasks_per_node(tasks_per_node)
 
         # Create the simulation model
         exec_path = "/".join([gen_dir,f"Case{i}"])
@@ -553,14 +560,15 @@ if __name__ == "__main__":
 
     # Data generation settings
     gen_node_count = 12
+    gen_nodes_per_case = 2
     gen_input_dir = "./data_generation/"
-    gen_tasks_per_node = 30
+    gen_tasks_per_node = 24
     gen_name = "data_generation"
 
     # Simulation settings
     sim_node_count = 1
     sim_input_dir = "./simulation_inputs/"
-    sim_tasks_per_node = 30
+    sim_tasks_per_node = 24
 
     # Training settings
     training_node_count = 1
@@ -588,7 +596,7 @@ if __name__ == "__main__":
     foam_env_vars = get_openfoam_env_vars()
 
     # Get simulation allocation
-    total_nodes = max(gen_node_count, sim_node_count, training_node_count)
+    total_nodes = gen_node_count + sim_node_count +training_node_count
     allocation = slurm.get_allocation(nodes=total_nodes,
                                       time="10:00:00",
                                       options={"exclusive": None,
@@ -596,20 +604,22 @@ if __name__ == "__main__":
 
     # Generate the data generation input files
     generate_data_gen_files(gen_node_count, gen_tasks_per_node,
+                            gen_nodes_per_case,
                             gen_input_dir, gen_name)
 
     # Run data generation domain decomposition
-    if (gen_tasks_per_node * gen_node_count) > 1:
+    if (gen_tasks_per_node * gen_nodes_per_case) > 1:
         run_data_gen_decomposition(allocation, foam_env_vars,
                                    gen_dir)
 
     # Run the data generation cases
     run_data_generation(allocation, foam_env_vars,
                         gen_node_count, gen_tasks_per_node,
+                        gen_nodes_per_case,
                         gen_dir)
 
     # Run the reconstruction step for data generation
-    if (gen_tasks_per_node * gen_node_count) > 1:
+    if (gen_tasks_per_node * gen_nodes_per_case) > 1:
         run_data_gen_reconstruction(allocation, foam_env_vars,
                                     gen_dir)
 
