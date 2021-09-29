@@ -231,7 +231,7 @@ actual path to SmartRedis.
 cd /path/to/OpenFOAM-5.x
 source etc/bashrc
 export SMARTREDIS_LIB_PATH=path/to/SmartRedis/install/lib
-export $SMARTREDIS_LIB_PATH:$FOAM_USER_LIBBIN:$FOAM_LIBBIN:$LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=$SMARTREDIS_LIB_PATH:$FOAM_USER_LIBBIN:$FOAM_LIBBIN:$LD_LIBRARY_PATH
 cd /path/to/smartsim-openFOAM/
 python drivery.py
 ```
