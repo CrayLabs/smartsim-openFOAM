@@ -131,6 +131,3 @@ OpenFOAM can now be built:
 ```
 cd OpenFOAM-5.x && ./Allwmake -j 8 && cd ..
 ```
-
-
-### Adding SmartRedis to OpenFOAM
