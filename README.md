@@ -70,11 +70,8 @@ wclean && wmake
 The executable for SimpleFoam_ML
 will be installed in a subdirectory of the
 directory referenced by the environment variable
-``FOAM_APPBIN``.  This location can be changed
-by editing the ``EXE`` variable in
-the ``simpleFoam_ML/Make/files`` file.
-
-Before proceeding, verify that the ``simpleFoam_ML`` executable
+``FOAM_APPBIN``.  Before proceeding, verify
+that the ``simpleFoam_ML`` executable
 exists in the aformentioned directory.
 
 ### SA_Detailed turbulence model
@@ -118,20 +115,52 @@ and should point to the top level ``SmartRedis`` directory.
 The dynamic library for the custom turbulence model
 will be installed in a subdirectory of the
 directory referenced by the environment variable
-``FOAM_USER_LIBBIN``.  This location can be changed
-by editing the ``LIB`` variable in
-the ``OF_Model/Make/files`` file.
-
-Before proceeding, verify that the ``ML_SA_CG.so`` file
+``FOAM_USER_LIBBIN``. Before proceeding, verify
+that the ``ML_SA_CG.so`` file
 exists in the aformentioned directory.
 
-#### Adding SmartRedis to OpenFOAM for TensorFlow inference
+## Running OpenFOAM with SmartSim
 
-In the above text, a description of how to build the
-OpenFOAM library with the SmartRedis client was
-described.  In this section, a brief description
+A ``SmartSim`` script (``driver.py``) is provided in this
+repository to execute the OpenFOAM case with
+the TensorFlow model.  The aforementioned ``SmartSim``
+script will deploy a ``SmartSim`` ``Orchestrator``,
+generate training data, train the machine
+learning model, and run the OpenFOAM simulation.
+The results of the simulation
+will be in the experiment directory ``openfoam_ml``.
+
+On machines with the Slurm workload manager,
+``run.sh`` can be used to execute the SmartSim script
+``driver.py``.  Parameters inside of ``run.sh`` can
+be modified to fit compute resource  availability.
+The variables ``OF_PATH`` and ``SMARTREDIS_LIB_PATH``
+must be set to the correct directories before
+executing ``run.sh``.  To run ``run.sh``, execute:
+
+```bash
+sbatch run.sh
+```
+
+On machines with the Cobalt workload manager (e.g. Theta),
+``run-theta.sh`` can be used to execute the SmartSim script
+``driver.py``.  Parameters inside of ``run-theta.sh`` can
+be modified to fit compute resource  availability.
+The variables ``OF_PATH`` and ``SMARTREDIS_LIB_PATH``
+must be set to the correct directories before
+executing ``run-theta.sh``.  To run ``run-theta.sh``, execute:
+
+```bash
+qsub run-theta.sh
+```
+
+## Notes on the inclusion of SmartRedis in OpenFOAM
+
+In this section, a brief description
 of the ``SmartRedis`` code that was added to
-OpenFOAM is described.
+OpenFOAM is presented.  With the notes herein,
+users should be able to include SmartRedis in any
+part of the OpenFOAM code.
 
 Aside from the addition of an include statement in
 ``ML_SA_CG.H``, all of the ``SmartRedis``
@@ -216,31 +245,3 @@ then be used in OpenFOAM simulation.
                          SmartRedis::TensorType::flt,
                          SmartRedis::MemoryLayout::contiguous);
 ```
-
-## Running OpenFOAM with SmartSim
-
-A ``SmartSim`` script is provided in this repository
-to execute the OpenFOAM case with the TensorFlow model.
-To run the ``SmartSim`` script, execute the following
-commands in the Python environment that contains the
-``SmartSim`` and the ``SmartRedis`` packages.  Replace
-the ``path/to/SmartRedis`` in the command before with the
-actual path to SmartRedis.
-
-```bash
-cd /path/to/OpenFOAM-5.x
-source etc/bashrc
-export SMARTREDIS_LIB_PATH=path/to/SmartRedis/install/lib
-export LD_LIBRARY_PATH=$SMARTREDIS_LIB_PATH:$FOAM_USER_LIBBIN:$FOAM_LIBBIN:$LD_LIBRARY_PATH
-cd /path/to/smartsim-openFOAM/
-python drivery.py
-```
-
-The aforementioned ``SmartSim`` script will
-deploy a ``SmartSim`` ``Orchestrator``,
-generate training data, train the machine
-learning model, and run the OpenFOAM simulation.
-Currently, the script is built for ``slurm``
-based systems but can be easily adpated
-to other machines. The results of the simulation
-will be in the experiment directory ``openfoam_ml``.

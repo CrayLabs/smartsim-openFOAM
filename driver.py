@@ -1,5 +1,5 @@
-from smartsim.settings import SrunSettings
-from smartsim.database import SlurmOrchestrator
+from smartsim.settings import SrunSettings, AprunSettings
+from smartsim.database import SlurmOrchestrator, CobaltOrchestrator
 from smartsim import Experiment, slurm, constants
 from smartredis import Client
 from os import environ, getcwd, listdir, walk, rename
@@ -9,7 +9,62 @@ import time
 import math
 
 exp_name = "openfoam_ml"
-exp = Experiment(name=exp_name, launcher="slurm")
+exp = None
+launcher = None
+
+def create_of_model(launcher, nodes, ppn,
+                    exe, exe_args, model_name,
+                    exec_dir, env_vars):
+    """Construct an SmartSim Model for the OpenFOAM
+    executable.
+
+    :param launcher: The launcher to use for run settings
+    :type launcher: str
+    :param nodes: The number of nodes to use
+                  for the model run settings
+    :type nodes: int
+    :param ppn: The processes per node for the model
+                run settings
+    :type ppn: int
+    :param exe: The location of the executable (bsolute path)
+    :type exe: str
+    :param exe_args: The executable arguments
+    :type exe_args: dict with key for the argument
+                    and value for the argument value
+    :param model_name: The name of the model
+    :type model_name: str
+    :param exec_dir: The directory to associated with
+                    model execution.  Can be None.
+    :type exec_dir: str
+    :param env_vars: A dictionary of environment variables
+    :type env_vars: dict
+    :return: A SmartSim model
+    :rtype: SmartSim Model
+
+    """
+    # using slurm/srun
+    if launcher == "slurm":
+        rs = SrunSettings(exe,
+                          exe_args=exe_args,
+                          env_vars=env_vars)
+        rs.set_nodes(nodes)
+        rs.set_tasks_per_node(ppn)
+    # using cobalt/aprun
+    else:
+        rs = AprunSettings(exe, exe_args=exe_args)
+        rs.set_tasks(nodes*ppn)
+        rs.set_tasks_per_node(ppn)
+
+
+    if exec_dir is None:
+        open_foam = exp.create_model(model_name,
+                                     run_settings=rs)
+    else:
+        open_foam = exp.create_model(model_name,
+                                     run_settings=rs,
+                                     path=exec_dir)
+
+    return open_foam
 
 def get_openfoam_env_vars():
     """Return the environment variables for OpenFOAM
@@ -35,7 +90,7 @@ def get_openfoam_env_vars():
 
     return env_vars
 
-def start_database(port, nodes, cpus, tpq):
+def start_database(port, nodes, cpus, tpq, interface):
     """Create and start the Redis database
 
     :param port: port number of database
@@ -46,32 +101,37 @@ def start_database(port, nodes, cpus, tpq):
     :type cpus: int
     :param tpq: number of threads per queue
     :type tpq: int
+    :param interface: the network interface to bind to
+    :type interface: str
     :return: orchestrator instance
     :rtype: Orchestrator
     """
-    db = SlurmOrchestrator(port=port,
-                           db_nodes=nodes,
-                           batch=True,
-                           threads_per_queue=tpq)
+
+    if launcher == "slurm":
+        db = SlurmOrchestrator(port=port,
+                               db_nodes=nodes,
+                               batch=False,
+                               interface=interface)
+    else:
+        db = CobaltOrchestrator(port=port,
+                                db_nodes=nodes,
+                                batch=False,
+                                interface=interface)
     db.set_cpus(cpus)
-    db.set_walltime("2:00:00")
-    db.set_batch_arg("exclusive", None)
     exp.generate(db)
     exp.start(db)
     return db
 
-def run_decomposition(alloc, foam_env_vars, dir,
+def run_decomposition(foam_env_vars, exec_dir,
                       model_prefix="", block=False):
     """Run the OpenFOAM decomposition utility in a
     specified directory.
 
-    :param alloc: The allocation on which to run
-    :type alloc: str
     :param foam_env_vars: Environment variables
                           needed to run openFOAM
     :type foam_env_vars: dict of str keys and str values
-    :param dir: The directory where decomp should be run
-    :type dir: str
+    :param exec_dir: The directory where decomp should be run
+    :type exec_dir: str
     :param model_prefix: A prefix to add to the model
                          name
     :type model_prefix: str
@@ -80,33 +140,27 @@ def run_decomposition(alloc, foam_env_vars, dir,
     :type block: bool
     """
 
-    # Store the executable as a variable
-    executable = foam_env_vars['FOAM_APPBIN'] + "/decomposePar"
-
-    # Create the run settings for the mesh decomposition
-    srun = SrunSettings(exe = executable,
-                        env_vars = foam_env_vars,
-                        alloc = alloc)
-    srun.set_nodes(1)
-    srun.set_tasks(1)
-
     # Create a SmartSim model for decomposition utility
+    executable = foam_env_vars['FOAM_APPBIN'] + "/decomposePar"
     name = model_prefix + "decomp"
-    decomp_model = exp.create_model(name, srun, path=dir)
+    nodes = 1
+    ppn = 1
+    exe_args = None
+    decomp_model = create_of_model(launcher, nodes, ppn, executable,
+                                   exe_args, name, exec_dir, foam_env_vars)
 
     # Run the openFOAM decomposition utility
     exp.start(decomp_model, block=block)
 
-def run_reconstruction(alloc, foam_env_vars, dir,
+def run_reconstruction(foam_env_vars, exec_dir,
                        model_prefix="", block=False):
     """Run the openFOAM parallel reconstruction utility
 
-    :param alloc: The allocation on which to run
-    :type alloc: str
     :param foam_env_vars: Environment variables needed
                           to run openFOAM
     :type foam_env_vars: dict of str keys and str values
-    :type dir: str
+    :param exec_dir: The directory where decomp should be run
+    :type exec_dir: str
     :param model_prefix: A prefix to add to the model
                          name
     :type model_prefix: str
@@ -115,37 +169,28 @@ def run_reconstruction(alloc, foam_env_vars, dir,
     :type block: bool
     """
 
-    # Store the executable as a variable
-    executable = foam_env_vars['FOAM_APPBIN'] + "/reconstructPar"
-
-    # Create the run settings for recombining
-    srun = SrunSettings(exe = executable,
-                        env_vars = foam_env_vars,
-                        alloc = allocation)
-    srun.set_nodes(1)
-    srun.set_tasks(1)
-
     # Create the reconstruction model
+    executable = foam_env_vars['FOAM_APPBIN'] + "/reconstructPar"
     name = model_prefix + "recon"
-    openfoam_recon = exp.create_model(name, srun, path=dir)
+    nodes = 1
+    ppn = 1
+    exe_args = None
+    openfoam_recon = create_of_model(launcher, nodes, ppn, executable,
+                                     exe_args, name, exec_dir, foam_env_vars)
 
     # Start the reconstrucion utility
     exp.start(openfoam_recon, block=block)
 
-def generate_data_gen_files(node_count, tasks_per_node,
-                            node_per_case,
+def generate_data_gen_files(node_per_case, tasks_per_node,
                             input_dir, name):
     """Generate the OpenFOAM cases used for training data
 
-    :param node_count: The number of compute nodes
-                       to use for the data generation
-    :type node_count: int
-    :param tasks_per_node: The number of tasks
-                           per compute node
-    :type tasks_per_node: int
     :param node_per_case: The number of nodes to
                            use per data generation case
     :type node_per_case: int
+    :param tasks_per_node: The number of tasks
+                           per compute node
+    :type tasks_per_node: int
     :param input_dir: The directory where the cases
                       (i.e. Case1, Case2, Case3..)
                       are located
@@ -211,12 +256,10 @@ def generate_data_gen_files(node_count, tasks_per_node,
         new_file = "./" + exp_name + f"/{name}/" + c_file[1] + c_file[2]
         copyfile(old_file, new_file)
 
-def run_data_gen_decomposition(alloc, foam_env_vars, dir):
+def run_data_gen_decomposition(foam_env_vars, dir):
     """Run the decomposition step for the training data
     cases
 
-    :param alloc: The allocation on which to run
-    :type alloc: str
     :param foam_env_vars: Environment variables needed
                           to run openFOAM
     :type foam_env_vars: dict of str keys and str values
@@ -228,27 +271,23 @@ def run_data_gen_decomposition(alloc, foam_env_vars, dir):
 
     for i, d in enumerate(case_dirs):
         model_prefix = f"case{i+1}_"
-        run_decomposition(alloc, foam_env_vars, d,
+        run_decomposition(foam_env_vars, d,
                           model_prefix=model_prefix, block=False)
 
     exp.poll()
 
-def run_data_generation(alloc, foam_env_vars, node_count,
-                        tasks_per_node, node_per_case, gen_dir):
+def run_data_generation(foam_env_vars, node_per_case,
+                        tasks_per_node, gen_dir):
     """Run the openFOAM data generation simulations
 
-    :param alloc: The allocation on which to run
-    :type alloc: str
     :param foam_env_vars: Environment variables needed
                           to run openFOAM
     :type foam_env_vars: dict of str keys and str values
-    :param node_count: The number of compute nodes available
-    :type node_count: int
-    :param tasks_per_node: The number of tasks per compute node
-    :type tasks_per_node: int
     :param node_per_case: The number of nodes to
                            use per data generation case
     :type node_per_case: int
+    :param tasks_per_node: The number of tasks per compute node
+    :type tasks_per_node: int
     :param gen_dir: The directory where the generated
                     cases are located (i.e. Case1, Case2, etc..)
     :type gen_dir: str
@@ -262,79 +301,64 @@ def run_data_generation(alloc, foam_env_vars, node_count,
         exe_args = "-parallel"
 
     for i in range(1,7):
-        # Create the run settings for the simulation model
-        srun = SrunSettings(exe = executable,
-                            exe_args = exe_args,
-                            env_vars = foam_env_vars,
-                            alloc = allocation)
-        srun.set_nodes(node_per_case)
-        srun.set_tasks_per_node(tasks_per_node)
-
         # Create the simulation model
         exec_path = "/".join([gen_dir,f"Case{i}"])
         model_name = f"data_gen{i}"
-        model = exp.create_model(model_name, srun, path=exec_path)
+        model = create_of_model(launcher, node_per_case, tasks_per_node,
+                                executable, exe_args, model_name, exec_path,
+                                foam_env_vars)
 
         # Start the simulation model
         exp.start(model, block=False)
 
     exp.poll()
 
-def run_data_gen_reconstruction(alloc, foam_env_vars, dir):
+def run_data_gen_reconstruction(foam_env_vars, gen_dir):
     """Run the data generation reconstruction step
 
-    :param alloc: The allocation on which to run
-    :type alloc: str
     :param foam_env_vars: Environment variables needed
                           to run openFOAM
     :type foam_env_vars: dict of str keys and str values
-    :param dir: The directory where data generation cases
+    :param gen_dir: The directory where data generation cases
                reside (e.g. Case1, Case2, ...)
-    :type dir: str
+    :type gen_dir: str
     """
 
-    case_dirs = ["/".join([dir, f"Case{i}"]) for i in range(1,7)]
+    case_dirs = ["/".join([gen_dir, f"Case{i}"]) for i in range(1,7)]
 
     for i, dir in enumerate(case_dirs):
         model_prefix = f"case{i+1}_"
-        run_reconstruction(alloc, foam_env_vars, dir,
+        run_reconstruction(foam_env_vars, dir,
                            model_prefix=model_prefix, block=False)
 
     exp.poll()
 
-def run_data_gen_dataset_construction(alloc, dir):
+def run_data_gen_dataset_construction(gen_dir):
     """Run the script to aggregate training data
 
-    :param alloc: The allocation on which to run
-    :type alloc: str
-    :param dir: The directory where the generated cases
+    :param gen_dir: The directory where the generated cases
                     are located (i.e. Case1, Case2, etc..)
-    :type dir: str
+    :type gen_dir: str
     """
     # Store the executable and exec args
     executable = "python"
     exe_args = "training_data_maker.py"
 
-    # Create the run settings
-    srun = SrunSettings(exe = executable,
-                               exe_args = exe_args,
-                               alloc = allocation)
-    srun.set_nodes(1)
-    srun.set_tasks(1)
-
     # Create the data aggregation model
     model_name = "dataset_construction"
-    script_model = exp.create_model(model_name, srun, path=gen_dir)
+    nodes = 1
+    tasks_per_node = 1
+    script_model = create_of_model(launcher, nodes, tasks_per_node,
+                                   executable, exe_args, model_name, gen_dir,
+                                   foam_env_vars)
 
     # Start the data aggregation script
     exp.start(script_model)
 
-def run_training(alloc, training_dir, training_node_count,
+def run_training(training_dir, training_node_count,
                  training_tasks_per_node, gen_dir):
     """Run the TensorFlow training script
 
-    :param alloc: The allocation on which to run
-    :type alloc: str
     :param training_dir: The directory where the training
                          script and training data are located
     :type training_dir: str
@@ -349,15 +373,16 @@ def run_training(alloc, training_dir, training_node_count,
     :type gen_dir: str
     """
 
-    # Create the run settings for the training script
-    srun = SrunSettings(exe = "python",
-                        exe_args = "ML_Model.py",
-                        alloc = alloc)
-    srun.set_nodes(training_node_count)
-    srun.set_tasks(training_tasks_per_node)
-
     # Create a SmartSim model for the training model
-    training_model = exp.create_model("training", srun)
+    model_name = "training"
+    executable = "python"
+    exe_args = "ML_Model.py"
+    modle_name = "training"
+    nodes = training_node_count
+    tasks_per_node = training_tasks_per_node
+    training_model = create_of_model(launcher, nodes, tasks_per_node,
+                                     executable, exe_args, model_name, None,
+                                     foam_env_vars)
 
     # Set the model to copy input files
     files_to_copy = []
@@ -390,7 +415,7 @@ def set_model(model_file, device, batch_size, address, cluster):
     """
 
     client = Client(address=address, cluster=cluster)
-    time.sleep(10)
+
     client.set_model_from_file("ml_sa_cg_model",
                                 model_file,
                                 "TF",
@@ -480,21 +505,17 @@ def generate_simulation_files(node_count, tasks_per_node,
         new_file = "./" + exp_name + "/openfoam/" + c_file[1] + c_file[2]
         rename(old_file, new_file)
 
-def run_simulation(alloc, foam_env_vars, node_count,
-                   tasks_per_node, sim_dir):
+def run_simulation(foam_env_vars, nodes, ppn, sim_dir):
     """Run the openFOAM simulation
 
-    :param alloc: The allocation on which to run
-    :type alloc: str
     :param foam_env_vars: Environment variables needed
                           to run openFOAM
     :type foam_env_vars: dict of str keys and str values
-    :param node_count: The number of compute nodes
+    :param nodes: The number of compute nodes
                            to use for the simulation
-    :type node_count: int
-    :param tasks_per_node: The number of tasks
-                               per compute node
-    :type tasks_per_node: int
+    :type nodes: int
+    :param ppn: The number of processors per node
+    :type ppn: int
     :param sim_dir: The directory where the generated input files
                     are located
     :type sim_dir: str
@@ -504,76 +525,80 @@ def run_simulation(alloc, foam_env_vars, node_count,
 
     # Set exec args to "-parallel" if needed
     exe_args = None
-    if (node_count*tasks_per_node)>1:
+    if (nodes*ppn)>1:
         exe_args = "-parallel"
 
-    # Create the run settings for the simulation model
-    srun = SrunSettings(exe = executable,
-                        exe_args = exe_args,
-                        env_vars = foam_env_vars,
-                        alloc = allocation)
-    srun.set_nodes(node_count)
-    srun.set_tasks(tasks_per_node)
-
     # Create the simulation model
-    model = exp.create_model("sim", srun, path=sim_dir)
+    model_name = "sim"
+    model = create_of_model(launcher, nodes, ppn, executable,
+                            exe_args, model_name, sim_dir,
+                            foam_env_vars)
 
     # Start the simulation model
     exp.start(model)
 
-def run_foamtovtk(alloc, foam_env_vars, dir):
+def run_foamtovtk(foam_env_vars, sim_dir):
     """Run the foamToVTK utility to process output
     files into VTK files
 
-    :param alloc: The allocation on which to run
-    :type alloc: str
     :param foam_env_vars: Environment variables needed
                           to run openFOAM
     :type foam_env_vars: dict of str keys and str values
-    :param dir: The directory where the generated simulation
+    :param sim_dir: The directory where the generated simulation
                 files are located
-    :type dir: str
+    :type sim_dir: str
     """
     # Store the executable as a variable
     executable = foam_env_vars['FOAM_APPBIN'] + "/foamToVTK"
 
-    # Create the run settings for recombining
-    srun = SrunSettings(exe = executable,
-                            env_vars = foam_env_vars,
-                            alloc = allocation)
-    srun.set_nodes(1)
-    srun.set_tasks(1)
-
     # Create the reconstruction model
-    model = exp.create_model("fomatovtk", srun, path=dir)
-
+    model_name = "foamtovtk"
+    nodes = 1
+    ppn = 1
+    exe_args = None
+    model = create_of_model(launcher, nodes, ppn, executable,
+                            exe_args, model_name, sim_dir,
+                            foam_env_vars)
     # Start the fomatovtk utility
     exp.start(model)
 
 if __name__ == "__main__":
 
+    import argparse
+    parser = argparse.ArgumentParser(description="Run OpenFOAM ML Experiment")
+    parser.add_argument("--launcher", type=str, default="slurm", help="Launcher for the experiment")
+    parser.add_argument("--db_nodes", type=int, default=1, help="Number of nodes for the database")
+    parser.add_argument("--db_port", type=int, default=6780, help="Port for the database")
+    parser.add_argument("--db_interface", type=str, default="ipogif0", help="Network interface for the database")
+    parser.add_argument("--gen_nodes", type=int, default=2, help="Number of nodes to use for each data generation case")
+    parser.add_argument("--gen_ppn", type=int, default=24, help="Number of processors per node for each generation case")
+    parser.add_argument("--sim_nodes", type=int, default=1, help="Number of nodes for the OpenFOAM inference case")
+    parser.add_argument("--sim_ppn", type=int, default=24, help="Number of processors per node for OpenFOAM inference case")
+    args = parser.parse_args()
+
     # Orchestrator settings
-    db_node_count = 1
-    db_cpus = 36
+    db_node_count = args.db_nodes
+    db_port = args.db_port
+    db_interface = args.db_interface
+    db_cpus = 16
     db_tpq = 4
-    db_port = 6379
 
     # Data generation settings
-    gen_node_count = 12
-    gen_nodes_per_case = 2
+    gen_nodes_per_case = args.gen_nodes
+    gen_tasks_per_node = args.gen_ppn
     gen_input_dir = "./data_generation/"
-    gen_tasks_per_node = 24
     gen_name = "data_generation"
 
     # Simulation settings
-    sim_node_count = 1
+    sim_node_count = args.sim_nodes
+    sim_tasks_per_node = args.sim_ppn
     sim_input_dir = "./simulation_inputs/"
-    sim_tasks_per_node = 24
 
-    # Training settings
+
+    # Training settings (do not change)
     training_node_count = 1
-    training_dir = "./training"
     training_tasks_per_node = 1
+    training_dir = "./training"
 
     # Model settings
     model_file = "./" + exp_name + "/training/ML_SA_CG.pb"
@@ -585,8 +610,14 @@ if __name__ == "__main__":
     sim_dir = "/".join([getcwd(),exp_name,sim_name])
     gen_dir = "/".join([getcwd(),exp_name,gen_name])
 
+    # Create and set the global variable exp
+    exp = Experiment(name=exp_name, launcher=args.launcher)
+
+    # Create and set the global variable launcher
+    launcher = args.launcher
+
     # Launch orchestrator
-    db = start_database(db_port, db_node_count, db_cpus, db_tpq)
+    db = start_database(db_port, db_node_count, db_cpus, db_tpq, db_interface)
 
     # Retrieve one of the orchestrator addresses to set
     # the ML model into the database
@@ -595,39 +626,28 @@ if __name__ == "__main__":
     # Retrieve OpenFOAM environment variables for execution
     foam_env_vars = get_openfoam_env_vars()
 
-    # Get simulation allocation
-    total_nodes = gen_node_count + sim_node_count +training_node_count
-    allocation = slurm.get_allocation(nodes=total_nodes,
-                                      time="10:00:00",
-                                      options={"exclusive": None,
-                                               "job-name": "openfoam"})
-
     # Generate the data generation input files
-    generate_data_gen_files(gen_node_count, gen_tasks_per_node,
-                            gen_nodes_per_case,
+    generate_data_gen_files(gen_nodes_per_case, gen_tasks_per_node,
                             gen_input_dir, gen_name)
 
     # Run data generation domain decomposition
     if (gen_tasks_per_node * gen_nodes_per_case) > 1:
-        run_data_gen_decomposition(allocation, foam_env_vars,
-                                   gen_dir)
+        run_data_gen_decomposition(foam_env_vars,gen_dir)
 
     # Run the data generation cases
-    run_data_generation(allocation, foam_env_vars,
-                        gen_node_count, gen_tasks_per_node,
-                        gen_nodes_per_case,
+    run_data_generation(foam_env_vars, gen_nodes_per_case,
+                        gen_tasks_per_node,
                         gen_dir)
 
     # Run the reconstruction step for data generation
     if (gen_tasks_per_node * gen_nodes_per_case) > 1:
-        run_data_gen_reconstruction(allocation, foam_env_vars,
-                                    gen_dir)
+        run_data_gen_reconstruction(foam_env_vars, gen_dir)
 
     # Run the script to create training dataset
-    run_data_gen_dataset_construction(allocation, gen_dir)
+    run_data_gen_dataset_construction(gen_dir)
 
     # Train the ML model for the simulation
-    run_training(allocation, training_dir,
+    run_training(training_dir,
                  training_node_count,
                  training_tasks_per_node, gen_dir)
 
@@ -641,21 +661,20 @@ if __name__ == "__main__":
 
     # Run decomposition for parallel execution
     if sim_tasks_per_node * sim_node_count > 1:
-        run_decomposition(allocation, foam_env_vars, sim_dir,
+        run_decomposition(foam_env_vars, sim_dir,
                           model_prefix="sim_", block=True)
 
     # Run the openFOAM simulation
-    run_simulation(allocation, foam_env_vars,
+    run_simulation(foam_env_vars,
                    sim_node_count, sim_tasks_per_node, sim_dir)
 
     # Run reconstruction for parallel execution
     if sim_tasks_per_node * sim_node_count > 1:
-        run_reconstruction(allocation, foam_env_vars, sim_dir,
+        run_reconstruction(foam_env_vars, sim_dir,
                            model_prefix="sim_", block=True)
 
     # Run foamToVTK to generate VTK output files
-    run_foamtovtk(allocation, foam_env_vars, sim_dir)
-
+    run_foamtovtk(foam_env_vars, sim_dir)
 
 
 
