@@ -19,6 +19,11 @@ and retrieve the model inference result.  In the following
 sections, instructions will be given for building and running
 the aforementioned example.
 
+
+![TFF-SmartSim-inference](https://user-images.githubusercontent.com/13009163/135544687-ea219754-3c79-4140-987b-8f0c81020cea.png)
+
+Absolute value of the difference between the ML inferred value of eddy viscosity using SmartSim vs the Spalart Allmaras (SA) calculated value from the original TensorFlowFoam project repository. The geometry upstream from the step has been truncated where the error is lowest.
+
 ## Prerequisites
 
 ### OpenFOAM-5.x and ThirdParty-5.x
