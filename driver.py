@@ -217,44 +217,16 @@ def generate_data_gen_files(node_per_case, tasks_per_node,
         "proc_x_y":str(big) + " " + str(small),
         "n_procs":str(n_proc)}
 
-    # Create a SmartSim model that will generate all of
-    # files for the data generation run.  The generation is
-    # split into a copy step and a configure step because
-    # currently to_configure param does not support
-    # directories and we want to preserve directory structure.
-    copy_model = exp.create_model(name, None)
+    # Create a SmartSim model that will generate and
+    # configure all files
+    model = exp.create_model(name, None, params=params)
 
-    # Copy all input files
-    copy_model.attach_generator_files(to_copy=input_dir)
+    # Attach the entire data generation directory
+    model.attach_generator_files(to_configure=input_dir)
 
-    # Generate the experiment file directory
-    exp.generate(copy_model, overwrite=True)
-
-    # Create a list of tuples containing the
-    # original input directory, the subdirectory inside
-    # of the top-level diretory and the file name
-    config_files = [(input_dir, f"/Case{i}/system/", "decomposeParDict") for i in range(1,7)]
-
-    # Create a model used to write configured input file
-    config_model =  exp.create_model("config", None, params=params)
-
-    # Attach all the files to be configured.
-    # Because all decomposeParDict file are identical,
-    # we only need to configure one and copy it to all
-    # directories
-    file_name = config_files[0][0] + \
-                config_files[0][1] + \
-                config_files[0][2]
-    config_model.attach_generator_files(to_configure=[file_name])
-
-    # Generate the configured files into a "config" directory
-    exp.generate(config_model, tag="@", overwrite=True)
-
-    # Copy the configured files to the simulation directory
-    for c_file in config_files:
-        old_file = "./" + exp_name + "/config/" + c_file[2]
-        new_file = "./" + exp_name + f"/{name}/" + c_file[1] + c_file[2]
-        copyfile(old_file, new_file)
+    # Generate the experiment file directory and replace
+    # config parameters
+    exp.generate(model, tag="@", overwrite=True)
 
 def run_data_gen_decomposition(foam_env_vars, dir):
     """Run the decomposition step for the training data
@@ -466,44 +438,21 @@ def generate_simulation_files(node_count, tasks_per_node,
         "proc_x_y":str(big) + " " + str(small),
         "n_procs":str(n_proc)}
 
-    # Create a SmartSim model that will generate all of
-    # files for the OpenFOAM run.  We do this because OpenFOAM
-    # splits up execution of the simulation into different
-    # steps (i.e. executables).  We split up the generation
-    # into a copy step and a configure step because currently
-    # to_configure param does not support directories and we
-    # want to preserve directory structure
-    copy_model = exp.create_model(sim_name, None)
+    # Create a SmartSim model that will generate and
+    # configure all files
+    model = exp.create_model(sim_name, None, params=params)
 
-    # Copy all input files
-    files_to_copy = []
-    files_to_copy.append(sim_input_dir)
-    files_to_copy.append("/".join([gen_dir,"means"]))
+    # Copy "means" files from data generation directory
+    files_to_copy = ["/".join([gen_dir,"means"])]
 
-    copy_model.attach_generator_files(to_copy=files_to_copy)
+    # Attach the entire data generation directory and files
+    # to copy
+    model.attach_generator_files(to_copy=files_to_copy,
+                                 to_configure=sim_input_dir)
 
-    # Generate the experiment file directory
-    exp.generate(copy_model, overwrite=True)
-
-    # Create a list of tuples containing the
-    # original input directory, the subdirectory inside of the
-    # top-level diretory and the file name
-    config_files = [(sim_input_dir, "system/", "decomposeParDict")]
-
-    # Create a model used to write configured input files
-    config_model =  exp.create_model("config", None, params=params)
-
-    # Attach all the files to be configured
-    config_model.attach_generator_files(to_configure=[f[0]+f[1]+f[2] for f in config_files])
-
-    # Generate the configured files into a "config" directory
-    exp.generate(config_model, tag="@", overwrite=True)
-
-    # Copy the configured files to the simulation directory
-    for c_file in config_files:
-        old_file = "./" + exp_name + "/config/" + c_file[2]
-        new_file = "./" + exp_name + "/openfoam/" + c_file[1] + c_file[2]
-        rename(old_file, new_file)
+    # Generate the experiment file directory and replace
+    # config parameters
+    exp.generate(model, tag="@", overwrite=True)
 
 def run_simulation(foam_env_vars, nodes, ppn, sim_dir):
     """Run the openFOAM simulation
@@ -593,7 +542,6 @@ if __name__ == "__main__":
     sim_node_count = args.sim_nodes
     sim_tasks_per_node = args.sim_ppn
     sim_input_dir = "./simulation_inputs/"
-
 
     # Training settings (do not change)
     training_node_count = 1
