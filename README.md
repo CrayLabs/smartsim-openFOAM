@@ -44,6 +44,7 @@ and files.
 An installation of SmartSim is required to run this example.
 SmartSim can be installed via ``pip`` or from source using the public
 [installation instructions](https://www.craylabs.org/docs/installation.html#smartsim).
+The current implementation is compatible with SmartSim v0.4.0 API.
 
 An installation of SmartRedis is also required to run this example.
 The SmartRedis Python client, which is used in the ``driver.py`` file
@@ -54,6 +55,7 @@ the public
 The SmartRedis C++ client library is also required and can be built and installed
 using the public
 [installation instructions](https://www.craylabs.org/docs/installation.html#smartredis).
+The current implementation is compatible with SmartRedis v0.3.0 API.
 
 ### SimpleFoam_ML
 
