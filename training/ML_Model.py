@@ -10,7 +10,7 @@ from sklearn.pipeline import Pipeline
 import joblib
 from sklearn.metrics import r2_score
 
-from smartsim.tf import freeze_model
+from smartsim.ml.tf import freeze_model
 
 np.random.seed(10)
 tf.random.set_seed(10)

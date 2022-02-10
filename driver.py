@@ -1,25 +1,19 @@
-from smartsim.settings import SrunSettings, AprunSettings
-from smartsim.database import SlurmOrchestrator, CobaltOrchestrator
-from smartsim import Experiment, slurm, constants
+from smartsim import Experiment
+from smartsim.database import Orchestrator
 from smartredis import Client
-from os import environ, getcwd, listdir, walk, rename
-from shutil import copyfile
-from os.path import isfile, join
-import time
+from os import environ, getcwd
+from os.path import join
 import math
 
 exp_name = "openfoam_ml"
 exp = None
-launcher = None
 
-def create_of_model(launcher, nodes, ppn,
+def create_of_model(nodes, ppn,
                     exe, exe_args, model_name,
                     exec_dir, env_vars):
     """Construct an SmartSim Model for the OpenFOAM
     executable.
 
-    :param launcher: The launcher to use for run settings
-    :type launcher: str
     :param nodes: The number of nodes to use
                   for the model run settings
     :type nodes: int
@@ -42,27 +36,17 @@ def create_of_model(launcher, nodes, ppn,
     :rtype: SmartSim Model
 
     """
-    # using slurm/srun
-    if launcher == "slurm":
-        rs = SrunSettings(exe,
-                          exe_args=exe_args,
-                          env_vars=env_vars)
-        rs.set_nodes(nodes)
-        rs.set_tasks_per_node(ppn)
-    # using cobalt/aprun
-    else:
-        rs = AprunSettings(exe, exe_args=exe_args)
-        rs.set_tasks(nodes*ppn)
-        rs.set_tasks_per_node(ppn)
 
+    run_settings = exp.create_run_settings(exe,
+                                           run_command="auto",
+                                           exe_args=exe_args,
+                                           env_vars=env_vars)
+    run_settings.set_nodes(nodes)
+    run_settings.set_tasks_per_node(ppn)
 
-    if exec_dir is None:
-        open_foam = exp.create_model(model_name,
-                                     run_settings=rs)
-    else:
-        open_foam = exp.create_model(model_name,
-                                     run_settings=rs,
-                                     path=exec_dir)
+    open_foam = exp.create_model(model_name,
+                                 run_settings=run_settings,
+                                 path=exec_dir)
 
     return open_foam
 
@@ -107,16 +91,10 @@ def start_database(port, nodes, cpus, tpq, interface):
     :rtype: Orchestrator
     """
 
-    if launcher == "slurm":
-        db = SlurmOrchestrator(port=port,
-                               db_nodes=nodes,
-                               batch=False,
-                               interface=interface)
-    else:
-        db = CobaltOrchestrator(port=port,
-                                db_nodes=nodes,
-                                batch=False,
-                                interface=interface)
+    db = Orchestrator(launcher='auto',
+                      db_nodes=nodes,
+                      batch=False,
+                      interface=interface)
     db.set_cpus(cpus)
     exp.generate(db)
     exp.start(db)
@@ -146,7 +124,7 @@ def run_decomposition(foam_env_vars, exec_dir,
     nodes = 1
     ppn = 1
     exe_args = None
-    decomp_model = create_of_model(launcher, nodes, ppn, executable,
+    decomp_model = create_of_model(nodes, ppn, executable,
                                    exe_args, name, exec_dir, foam_env_vars)
 
     # Run the openFOAM decomposition utility
@@ -175,7 +153,7 @@ def run_reconstruction(foam_env_vars, exec_dir,
     nodes = 1
     ppn = 1
     exe_args = None
-    openfoam_recon = create_of_model(launcher, nodes, ppn, executable,
+    openfoam_recon = create_of_model(nodes, ppn, executable,
                                      exe_args, name, exec_dir, foam_env_vars)
 
     # Start the reconstrucion utility
@@ -276,7 +254,7 @@ def run_data_generation(foam_env_vars, node_per_case,
         # Create the simulation model
         exec_path = "/".join([gen_dir,f"Case{i}"])
         model_name = f"data_gen{i}"
-        model = create_of_model(launcher, node_per_case, tasks_per_node,
+        model = create_of_model(node_per_case, tasks_per_node,
                                 executable, exe_args, model_name, exec_path,
                                 foam_env_vars)
 
@@ -320,7 +298,7 @@ def run_data_gen_dataset_construction(gen_dir):
     model_name = "dataset_construction"
     nodes = 1
     tasks_per_node = 1
-    script_model = create_of_model(launcher, nodes, tasks_per_node,
+    script_model = create_of_model(nodes, tasks_per_node,
                                    executable, exe_args, model_name, gen_dir,
                                    foam_env_vars)
 
@@ -352,7 +330,7 @@ def run_training(training_dir, training_node_count,
     modle_name = "training"
     nodes = training_node_count
     tasks_per_node = training_tasks_per_node
-    training_model = create_of_model(launcher, nodes, tasks_per_node,
+    training_model = create_of_model(nodes, tasks_per_node,
                                      executable, exe_args, model_name, None,
                                      foam_env_vars)
 
@@ -479,7 +457,7 @@ def run_simulation(foam_env_vars, nodes, ppn, sim_dir):
 
     # Create the simulation model
     model_name = "sim"
-    model = create_of_model(launcher, nodes, ppn, executable,
+    model = create_of_model(nodes, ppn, executable,
                             exe_args, model_name, sim_dir,
                             foam_env_vars)
 
@@ -505,7 +483,7 @@ def run_foamtovtk(foam_env_vars, sim_dir):
     nodes = 1
     ppn = 1
     exe_args = None
-    model = create_of_model(launcher, nodes, ppn, executable,
+    model = create_of_model(nodes, ppn, executable,
                             exe_args, model_name, sim_dir,
                             foam_env_vars)
     # Start the fomatovtk utility
@@ -515,7 +493,6 @@ if __name__ == "__main__":
 
     import argparse
     parser = argparse.ArgumentParser(description="Run OpenFOAM ML Experiment")
-    parser.add_argument("--launcher", type=str, default="slurm", help="Launcher for the experiment")
     parser.add_argument("--db_nodes", type=int, default=1, help="Number of nodes for the database")
     parser.add_argument("--db_port", type=int, default=6780, help="Port for the database")
     parser.add_argument("--db_interface", type=str, default="ipogif0", help="Network interface for the database")
@@ -559,10 +536,7 @@ if __name__ == "__main__":
     gen_dir = "/".join([getcwd(),exp_name,gen_name])
 
     # Create and set the global variable exp
-    exp = Experiment(name=exp_name, launcher=args.launcher)
-
-    # Create and set the global variable launcher
-    launcher = args.launcher
+    exp = Experiment(name=exp_name, launcher="auto")
 
     # Launch orchestrator
     db = start_database(db_port, db_node_count, db_cpus, db_tpq, db_interface)

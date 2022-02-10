@@ -4,7 +4,6 @@
 #COBALT -q default
 #COBALT -A datascience
 
-launcher=cobalt   # launcher for the run (slurm or cobalt)
 db_nodes=1        # the number of database nodes to use
 db_port=6379      # the port to use for database communication
 gen_nodes=2       # the number of compute nodes to use for each OpenFOAM data generation case
@@ -26,5 +25,5 @@ cd -
 
 export LD_LIBRARY_PATH=$SMARTREDIS_LIB_PATH:$FOAM_USER_LIBBIN:$FOAM_LIBBIN:$LD_LIBRARY_PATH
 
-python driver.py --launcher=$launcher --db_nodes=$db_nodes --db_port=$db_port \
-                 --gen_nodes=$gen_nodes --gen_ppn=$gen_ppn --sim_nodes=$sim_nodes --sim_ppn=$sim_ppn
+python driver.py --db_nodes=$db_nodes --db_port=$db_port --gen_nodes=$gen_nodes \
+                 --gen_ppn=$gen_ppn --sim_nodes=$sim_nodes --sim_ppn=$sim_ppn
