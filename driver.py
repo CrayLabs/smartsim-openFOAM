@@ -42,6 +42,7 @@ def create_of_model(nodes, ppn,
                                            exe_args=exe_args,
                                            env_vars=env_vars)
     run_settings.set_nodes(nodes)
+    run_settings.set_tasks(nodes*ppn)
     run_settings.set_tasks_per_node(ppn)
 
     open_foam = exp.create_model(model_name,
