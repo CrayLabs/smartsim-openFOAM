@@ -16,8 +16,8 @@ sim_ppn=24        # the number of processors per node for each OpenFOAM inferenc
 module unload atp
 export SMARTSIM_LOG_LEVEL=developer
 
-export OF_PATH=/lus/cls01029/mellis/cray_labs/OpenFOAM-5.x
-export SMARTREDIS_LIB_PATH=/lus/cls01029/mellis/cray_labs/SmartRedis/install/lib
+export OF_PATH=/path/to/OpenFOAM-5.x
+export SMARTREDIS_LIB_PATH=/path/to/SmartRedis/install/lib
 
 cd $OF_PATH
 source etc/bashrc
