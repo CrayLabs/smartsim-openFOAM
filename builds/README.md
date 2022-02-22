@@ -53,18 +53,11 @@ mkdir OpenFOAM-5.x/wmake/rules/crayxcGcc
 cp -r smartsim-openFOAM/builds/cray_xc/rules/* OpenFOAM-5.x/wmake/rules/crayxcGcc/
 ```
 
-Now that there are build rules for the Cray XC system, modify ``OpenFOAM-5.x/etc/bashrc`` to specify ``cray`` for ``WM_ARCH_OPTION``:
+Copy the OpenFOAM ``bashrc`` file that contains edits for
+``WM_ARCH_OPTION=cray`` and ``WM_MPLIB=MPICH2``:
 
-```
-# Locate WM_ARCH_OPTION in OpenFOAM-5.x/etc/bashrc and set to "cray"
-WM_ARCH_OPTION=cray
-```
-
-Also, the MPI library rules contained in the XC rules must be specified in the ``OpenFOAM-5.x/etc/bashrc`` file.  Locate ``WM_MPLIB`` and set to ``MPICH2``:
-
-```
-# Locate WM_MPLIB in OpenFOAM-5.x/etc/bashrc and set to "MPICH2"
-WM_MPLIB=MPICH2
+```bash
+cp smartsim-openFOAM/builds/cray_xc/bashrc OpenFOAM-5.x/etc/bashrc
 ```
 
 Now, copy the custom compiler options:
