@@ -28,34 +28,70 @@ Absolute value of the difference between the ML inferred value of eddy viscosity
 
 ### OpenFOAM-5.x and ThirdParty-5.x
 
-In this example, a deep neural network is used to predict steady-state
-turbulent viscosities of the Spalart-Allmaras (SA) model.  The
-evaluation of the deep neural network is incorporated into OpenFOAM
-via a custom turbulence model that is dynamically linked to the
-simulation.  As a result, the base OpenFOAM-5.x and ThirdParty-5.x
-applications can be built using typical build instructions.  However,
-in the case that a system (e.g. Cray XC) is being used that is
-not listed in the OpenFOAM make options, check the ``README`` of the
-``builds`` directory of this repository for custom build instructions
-and files.
+An installation of [OpenFOAM-5.x](https://github.com/OpenFOAM/OpenFOAM-5.x.git)
+and [ThirdParty-5.x](https://github.com/OpenFOAM/ThirdParty-5.x.git) is required to
+run this example.  If you do not have an installation of these packages,
+instructions are provided [here](/builds) for Cray XC (and similar) systems.
+
+### MiniConda
+
+This demonstration uses MiniConda. Although it is not strictly required, we recommend its use to simplify the tracking of different environments.
+
+MiniConda can be installed via `wget` of an appropriate installation script, such as one from
+
+ ```https://docs.conda.io/en/latest/miniconda.html#linux-installers```
+
+Theta users: on Theta, MiniConda is available through the module system and can be activated via the command
+
+```bash
+module load miniconda-3
+```
+
+We recommend creating a separate environment for this example:
+
+```bash
+conda create --name=smartsim-openfoam python=3.8.5
+conda activate smartsim-openfoam
+```
+
 
 ### SmartSim and SmartRedis
 
 An installation of SmartSim is required to run this example.
-SmartSim can be installed via ``pip`` or from source using the public
-[installation instructions](https://www.craylabs.org/docs/installation.html#smartsim).
-The current implementation is compatible with SmartSim v0.4.0 API.
+Additionally, the TensorFlow Python package should also
+be installed.  Note that this example is configured to use
+the CPU versions of the ML backends, but it can be reconfigured
+to use GPUs.  The aforementioned packages can be installed as follows:
 
-An installation of SmartRedis is also required to run this example.
-The SmartRedis Python client, which is used in the ``driver.py`` file
-to place the machine learning model in SmartSim orchestrator, can
-be installed via ``pip`` or as an editable install from source using
-the public
-[installation instructions](https://www.craylabs.org/docs/installation.html#smartredis).
-The SmartRedis C++ client library is also required and can be built and installed
-using the public
-[installation instructions](https://www.craylabs.org/docs/installation.html#smartredis).
-The current implementation is compatible with SmartRedis v0.3.0 API.
+
+```bash
+	conda install git-lfs
+    pip install smartsim==0.4.0
+    pip install tensorflow==2.5.2
+	smart build --device cpu
+```
+
+SmartRedis is also required for this example.  SmartRedis can be installed
+as follows:
+
+```
+git clone https://github.com/CrayLabs/SmartRedis
+cd SmartRedis
+make lib
+pip install .
+cd ../
+```
+
+### Python dependencies
+
+The training and visualization steps require additional python packages
+that can be installed inside of the newly created conda environment
+as follows:
+
+```
+cd /path/to/smartsim-openFOAM
+pip install -r requirements.txt
+```
 
 ### SimpleFoam_ML
 
@@ -79,7 +115,7 @@ will be installed in a subdirectory of the
 directory referenced by the environment variable
 ``FOAM_APPBIN``.  Before proceeding, verify
 that the ``simpleFoam_ML`` executable
-exists in the aformentioned directory.
+exists in the aforementioned directory.
 
 ### SA_Detailed turbulence model
 
@@ -92,7 +128,7 @@ cd /path/to/smartsim-openFOAM/turbulence_models/SA_Detailed
 wmake .
 ```
 
-After executing these commands, verify that ``SA_Detailed.so`` is in ``$FOAM_USER_LIBBIN``.
+After executing these commands, verify that ``SA_Detailed.so`` is in directory referenced by the environment variable ``FOAM_USER_LIBBIN``.
 
 ### ML_SA_CG turbulence model with SmartRedis
 
@@ -143,7 +179,10 @@ On machines with the Slurm workload manager,
 be modified to fit compute resource  availability.
 The variables ``OF_PATH`` and ``SMARTREDIS_LIB_PATH``
 must be set to the correct directories before
-executing ``run.sh``.  To run ``run.sh``, execute:
+executing ``run.sh``.  Also, the miniconda path
+to the smartsim-openfoam environment in ``run.sh``
+must be updated to the correct path.
+To run ``run.sh``, execute:
 
 ```bash
 sbatch run.sh
@@ -155,7 +194,10 @@ On machines with the Cobalt workload manager (e.g. Theta),
 be modified to fit compute resource  availability.
 The variables ``OF_PATH`` and ``SMARTREDIS_LIB_PATH``
 must be set to the correct directories before
-executing ``run-theta.sh``.  To run ``run-theta.sh``, execute:
+executing ``run-theta.sh``.  Also, the miniconda path
+to the smartsim-openfoam environment in ``run.sh``
+must be updated to the correct path.
+To run ``run-theta.sh``, execute:
 
 ```bash
 qsub run-theta.sh
@@ -218,8 +260,8 @@ type and memory layout associated with the ``input_vals`` variable.
 ```c++
     // Put the input tensor into the database
     client.put_tensor(input_key, input_vals, input_dims,
-                      SmartRedis::TensorType::flt,
-                      SmartRedis::MemoryLayout::nested);
+                      SRTensorTypeFloat,
+                      SRMemLayoutNested);
 ```
 
 In line 466 through 469, a key is constructed for the
@@ -249,6 +291,6 @@ then be used in OpenFOAM simulation.
     std::vector<float> data(num_cells, 0.0);
     client.unpack_tensor(output_key, data.data(),
                          {num_cells},
-                         SmartRedis::TensorType::flt,
-                         SmartRedis::MemoryLayout::contiguous);
+                         SRTensorTypeFloat,
+                         SRMemLayoutNested);
 ```

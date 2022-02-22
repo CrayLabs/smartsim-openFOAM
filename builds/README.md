@@ -67,28 +67,16 @@ Also, the MPI library rules contained in the XC rules must be specified in the `
 WM_MPLIB=MPICH2
 ```
 
-Cray specific compiler options need to be added to ``OpenFOAM-5.x/etc/config.sh/settings``. These options are shown in the block below, and ``smartsim-openFOAM/builds/cray_xc/settings`` shows the proper placement of these options.
+Now, copy the custom compiler options:
 
-```
-# Add these Cray compiler settings to OpenFOAM-5.x/etc/config.sh/settings
-cray)
-    WM_ARCH=crayxc
-    export WM_COMPILER_LIB_ARCH=64
-    export WM_CC='cc'
-    export WM_CXX='CC'
-    export WM_CFLAGS='-fPIC'
-    export WM_CXXFLAGS='-fPIC'
-    ;;
+```bash
+cp smartsim-openFOAM/builds/cray_xc/settings OpenFOAM-5.x/etc/config.sh/settings
 ```
 
-Cray MPI settings need to be added to ``OpenFOAM-5.x/etc/config.sh/mpi``. These options are shown in the block below, and ``smartsim-openFOAM/builds/cray_xc/mpi`` shows the proper placement of these options.  Verify that your current environment has ``$MPICH_DIR`` set to the correct path.  If not, this ``MPICH_DIR`` should be set to the MPICH install directory.
+Now, copy the custom MPI settings.  Verify that your current environment has ``MPICH_DIR`` set to the correct path.  If not, this ``MPICH_DIR`` should be set to the MPICH install directory.
 
-```
-# Add these Cray MPI settings to OpenFOAM-5.x/etc/config.sh/mpi
-MPICH2)
-    export FOAM_MPI=mpich2
-    export MPI_ARCH_PATH=$MPICH_DIR
-    ;;
+```bash
+cp smartsim-openFOAM/builds/cray_xc/mpi OpenFOAM-5.x/etc/config.sh/mpi
 ```
 
 The OpenFOAM build environment can now be set up with:
