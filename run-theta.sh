@@ -13,7 +13,7 @@ sim_ppn=64        # the number of processors per node for each OpenFOAM inferenc
 
 module unload atp
 module load miniconda-3/2021-07-28
-conda activate /path/to/miniconda3/envs/openfoam/
+conda activate /path/to/miniconda3/envs/smartsim-openfoam/
 export SMARTSIM_LOG_LEVEL=developer
 
 export OF_PATH=/path/to/OpenFOAM-5.x
