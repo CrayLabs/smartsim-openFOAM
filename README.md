@@ -31,7 +31,9 @@ Absolute value of the difference between the ML inferred value of eddy viscosity
 An installation of [OpenFOAM-5.x](https://github.com/OpenFOAM/OpenFOAM-5.x.git)
 and [ThirdParty-5.x](https://github.com/OpenFOAM/ThirdParty-5.x.git) is required to
 run this example.  If you do not have an installation of these packages,
-instructions are provided [here](/builds) for Cray XC (and similar) systems.
+instructions are provided [here](/builds) for Cray XC (and similar) systems.  The
+instructions in upcoming sections are applicable to both a system install or user install
+of OpenFOAM-5.x and ThirdParty-5.x.
 
 ### MiniConda
 
