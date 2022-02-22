@@ -67,10 +67,10 @@ to use GPUs.  The aforementioned packages can be installed as follows:
 
 
 ```bash
-	conda install git-lfs
-    pip install smartsim==0.4.0
-    pip install tensorflow==2.5.2
-	smart build --device cpu
+conda install git-lfs
+pip install smartsim==0.4.0
+pip install tensorflow==2.5.2
+smart build --device cpu
 ```
 
 SmartRedis is also required for this example.  SmartRedis can be installed
