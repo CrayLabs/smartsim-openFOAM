@@ -43,11 +43,13 @@ MiniConda can be installed via `wget` of an appropriate installation script, suc
 
  ```https://docs.conda.io/en/latest/miniconda.html#linux-installers```
 
-Theta users: on Theta, MiniConda is available through the module system and can be activated via the command
+**Theta users**: on Theta, MiniConda is available through the module system and can be activated via the command
 
 ```bash
 module load miniconda-3
 ```
+
+### Environment management
 
 We recommend creating a separate environment for this example:
 
@@ -55,7 +57,6 @@ We recommend creating a separate environment for this example:
 conda create --name=smartsim-openfoam python=3.8.5
 conda activate smartsim-openfoam
 ```
-
 
 ### SmartSim and SmartRedis
 
@@ -69,7 +70,6 @@ to use GPUs.  The aforementioned packages can be installed as follows:
 ```bash
 conda install git-lfs
 pip install smartsim==0.4.0
-pip install tensorflow==2.5.2
 smart build --device cpu
 ```
 
@@ -106,26 +106,20 @@ In this example, ``simpleFoam_ML`` is also used. To build
 the ``simpleFoam_ML`` executable, execute the following commands:
 
 ```bash
-cd /path/to/OpenFOAM-5.x
-source etc/bashrc
+source /path/to/OpenFOAM-5.x/etc/bashrc
 cd /path/to/smartsim-openFOAM/simpleFoam_ML
 wclean && wmake
 ```
 
-The executable for SimpleFoam_ML
-will be installed in a subdirectory of the
-directory referenced by the environment variable
-``FOAM_APPBIN``.  Before proceeding, verify
-that the ``simpleFoam_ML`` executable
-exists in the aforementioned directory.
+After executing these commands, verify that  ``simpleFoam_ML`` is in
+directory referenced by the environment variable ``FOAM_APPBIN``.
 
 ### SA_Detailed turbulence model
 
 The OpenFOAM cases that are used to generate training data utilize a custom turbulence model for enhanced data output.  To build this turbulence model, execute the following commands:
 
 ```bash
-cd /path/to/OpenFOAM-5.x
-source etc/bashrc
+source /path/to/OpenFOAM-5.x/etc/bashrc
 cd /path/to/smartsim-openFOAM/turbulence_models/SA_Detailed
 wmake .
 ```
@@ -147,8 +141,7 @@ To build the dynamic library, execute the following commands:
 
 ```bash
 export SMARTREDIS_PATH=path/to/SmartRedis
-cd /path/to/OpenFOAM-5.x
-source etc/bashrc
+source /path/to/OpenFOAM-5.x/etc/bashrc
 cd /path/to/smartsim-openFOAM/turbulence_models/ML_SA_CG
 wmake libso .
 ```
@@ -157,12 +150,7 @@ Note that the environment variable ``SMARTREDIS_PATH`` is used
 to locate the ``SmartRedis`` include and install directories
 and should point to the top level ``SmartRedis`` directory.
 
-The dynamic library for the custom turbulence model
-will be installed in a subdirectory of the
-directory referenced by the environment variable
-``FOAM_USER_LIBBIN``. Before proceeding, verify
-that the ``ML_SA_CG.so`` file
-exists in the aformentioned directory.
+After executing these commands, verify that ``ML_SA_CG.so`` is in directory referenced by the environment variable ``FOAM_USER_LIBBIN``.
 
 ## Running OpenFOAM with SmartSim
 
