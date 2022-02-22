@@ -43,7 +43,7 @@ def create_of_model(nodes, ppn,
                                            env_vars=env_vars)
 
     # Slurm requires the number of nodes but aprun does not support this
-    if(experiment._launcher == "slurm"):
+    if(exp._launcher == "slurm"):
         run_settings.set_nodes(nodes)
     run_settings.set_tasks(nodes*ppn)
     run_settings.set_tasks_per_node(ppn)
