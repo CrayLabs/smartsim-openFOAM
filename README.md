@@ -167,11 +167,9 @@ On machines with the Slurm workload manager,
 ``run.sh`` can be used to execute the SmartSim script
 ``driver.py``.  Parameters inside of ``run.sh`` can
 be modified to fit compute resource  availability.
-The variables ``OF_PATH`` and ``SMARTREDIS_LIB_PATH``
-must be set to the correct directories before
-executing ``run.sh``.  Also, the miniconda path
-to the smartsim-openfoam environment in ``run.sh``
-must be updated to the correct path.
+Be sure to set the ``run.sh`` script variables ``OF_PATH`` and
+``SMARTREDIS_LIB_PATH`` to the correct directories before
+executing ``run.sh``.
 To run ``run.sh``, execute:
 
 ```bash
@@ -182,11 +180,10 @@ On machines with the Cobalt workload manager (e.g. Theta),
 ``run-theta.sh`` can be used to execute the SmartSim script
 ``driver.py``.  Parameters inside of ``run-theta.sh`` can
 be modified to fit compute resource  availability.
-The variables ``OF_PATH`` and ``SMARTREDIS_LIB_PATH``
-must be set to the correct directories before
-executing ``run-theta.sh``.  Also, the miniconda path
-to the smartsim-openfoam environment in ``run.sh``
-must be updated to the correct path.
+Be sure to set the ``run-theta.sh`` script variables ``OF_PATH`` and
+``SMARTREDIS_LIB_PATH`` to the correct directories before
+executing ``run-theta.sh``.  Also, in the ``run-theta.sh`` script, set
+the miniconda path to the smartsim-openfoam environment.
 To run ``run-theta.sh``, execute:
 
 ```bash
