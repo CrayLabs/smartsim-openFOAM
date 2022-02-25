@@ -415,11 +415,12 @@ void ML_SA_CG<BasicTurbulenceModel>::run_ml_graph(double* mean_array, double* st
 
     float** input_vals = new float*[num_cells];
 
-    for(size_t i=0; i<num_cells; i++) {
+    for(int i=0; i<num_cells; i++) {
         input_vals[i] = new float[num_inputs];
     }
 
-	const std::vector<size_t> input_dims = {num_cells, num_inputs};
+	const std::vector<size_t> input_dims = {size_t(num_cells),
+                                            size_t(num_inputs)};
 
     volScalarField cx_ = this->mesh_.C().component(vector::X);
     volScalarField cy_ = this->mesh_.C().component(vector::Y);
@@ -464,8 +465,8 @@ void ML_SA_CG<BasicTurbulenceModel>::run_ml_graph(double* mean_array, double* st
 
         // Put the input tensor into the database
         client.put_tensor(input_key, input_vals, input_dims,
-                        SmartRedis::TensorType::flt,
-                        SmartRedis::MemoryLayout::nested);
+                          SRTensorTypeFloat,
+                          SRMemLayoutNested);
 
 
         // Run the model
@@ -475,9 +476,9 @@ void ML_SA_CG<BasicTurbulenceModel>::run_ml_graph(double* mean_array, double* st
 
         // Get the output tensor
         client.unpack_tensor(output_key, data.data(),
-                            {num_cells},
-                            SmartRedis::TensorType::flt,
-                            SmartRedis::MemoryLayout::contiguous);
+                             {size_t(num_cells)},
+                             SRTensorTypeFloat,
+                             SRMemLayoutContiguous);
     }
 
 	for (int i = 0; i < num_cells; i++)

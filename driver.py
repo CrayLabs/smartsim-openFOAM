@@ -1,25 +1,19 @@
-from smartsim.settings import SrunSettings, AprunSettings
-from smartsim.database import SlurmOrchestrator, CobaltOrchestrator
-from smartsim import Experiment, slurm, constants
+from smartsim import Experiment
+from smartsim.database import Orchestrator
 from smartredis import Client
-from os import environ, getcwd, listdir, walk, rename
-from shutil import copyfile
-from os.path import isfile, join
-import time
+from os import environ, getcwd
+from os.path import join
 import math
 
 exp_name = "openfoam_ml"
 exp = None
-launcher = None
 
-def create_of_model(launcher, nodes, ppn,
+def create_of_model(nodes, ppn,
                     exe, exe_args, model_name,
                     exec_dir, env_vars):
     """Construct an SmartSim Model for the OpenFOAM
     executable.
 
-    :param launcher: The launcher to use for run settings
-    :type launcher: str
     :param nodes: The number of nodes to use
                   for the model run settings
     :type nodes: int
@@ -42,27 +36,21 @@ def create_of_model(launcher, nodes, ppn,
     :rtype: SmartSim Model
 
     """
-    # using slurm/srun
-    if launcher == "slurm":
-        rs = SrunSettings(exe,
-                          exe_args=exe_args,
-                          env_vars=env_vars)
-        rs.set_nodes(nodes)
-        rs.set_tasks_per_node(ppn)
-    # using cobalt/aprun
-    else:
-        rs = AprunSettings(exe, exe_args=exe_args)
-        rs.set_tasks(nodes*ppn)
-        rs.set_tasks_per_node(ppn)
 
+    run_settings = exp.create_run_settings(exe,
+                                           run_command="auto",
+                                           exe_args=exe_args,
+                                           env_vars=env_vars)
 
-    if exec_dir is None:
-        open_foam = exp.create_model(model_name,
-                                     run_settings=rs)
-    else:
-        open_foam = exp.create_model(model_name,
-                                     run_settings=rs,
-                                     path=exec_dir)
+    # Slurm requires the number of nodes but aprun does not support this
+    if(exp._launcher == "slurm"):
+        run_settings.set_nodes(nodes)
+    run_settings.set_tasks(nodes*ppn)
+    run_settings.set_tasks_per_node(ppn)
+
+    open_foam = exp.create_model(model_name,
+                                 run_settings=run_settings,
+                                 path=exec_dir)
 
     return open_foam
 
@@ -107,16 +95,10 @@ def start_database(port, nodes, cpus, tpq, interface):
     :rtype: Orchestrator
     """
 
-    if launcher == "slurm":
-        db = SlurmOrchestrator(port=port,
-                               db_nodes=nodes,
-                               batch=False,
-                               interface=interface)
-    else:
-        db = CobaltOrchestrator(port=port,
-                                db_nodes=nodes,
-                                batch=False,
-                                interface=interface)
+    db = Orchestrator(launcher='auto',
+                      db_nodes=nodes,
+                      batch=False,
+                      interface=interface)
     db.set_cpus(cpus)
     exp.generate(db)
     exp.start(db)
@@ -146,7 +128,7 @@ def run_decomposition(foam_env_vars, exec_dir,
     nodes = 1
     ppn = 1
     exe_args = None
-    decomp_model = create_of_model(launcher, nodes, ppn, executable,
+    decomp_model = create_of_model(nodes, ppn, executable,
                                    exe_args, name, exec_dir, foam_env_vars)
 
     # Run the openFOAM decomposition utility
@@ -175,7 +157,7 @@ def run_reconstruction(foam_env_vars, exec_dir,
     nodes = 1
     ppn = 1
     exe_args = None
-    openfoam_recon = create_of_model(launcher, nodes, ppn, executable,
+    openfoam_recon = create_of_model(nodes, ppn, executable,
                                      exe_args, name, exec_dir, foam_env_vars)
 
     # Start the reconstrucion utility
@@ -217,44 +199,16 @@ def generate_data_gen_files(node_per_case, tasks_per_node,
         "proc_x_y":str(big) + " " + str(small),
         "n_procs":str(n_proc)}
 
-    # Create a SmartSim model that will generate all of
-    # files for the data generation run.  The generation is
-    # split into a copy step and a configure step because
-    # currently to_configure param does not support
-    # directories and we want to preserve directory structure.
-    copy_model = exp.create_model(name, None)
+    # Create a SmartSim model that will generate and
+    # configure all files
+    model = exp.create_model(name, None, params=params)
 
-    # Copy all input files
-    copy_model.attach_generator_files(to_copy=input_dir)
+    # Attach the entire data generation directory
+    model.attach_generator_files(to_configure=input_dir)
 
-    # Generate the experiment file directory
-    exp.generate(copy_model, overwrite=True)
-
-    # Create a list of tuples containing the
-    # original input directory, the subdirectory inside
-    # of the top-level diretory and the file name
-    config_files = [(input_dir, f"/Case{i}/system/", "decomposeParDict") for i in range(1,7)]
-
-    # Create a model used to write configured input file
-    config_model =  exp.create_model("config", None, params=params)
-
-    # Attach all the files to be configured.
-    # Because all decomposeParDict file are identical,
-    # we only need to configure one and copy it to all
-    # directories
-    file_name = config_files[0][0] + \
-                config_files[0][1] + \
-                config_files[0][2]
-    config_model.attach_generator_files(to_configure=[file_name])
-
-    # Generate the configured files into a "config" directory
-    exp.generate(config_model, tag="@", overwrite=True)
-
-    # Copy the configured files to the simulation directory
-    for c_file in config_files:
-        old_file = "./" + exp_name + "/config/" + c_file[2]
-        new_file = "./" + exp_name + f"/{name}/" + c_file[1] + c_file[2]
-        copyfile(old_file, new_file)
+    # Generate the experiment file directory and replace
+    # config parameters
+    exp.generate(model, tag="@", overwrite=True)
 
 def run_data_gen_decomposition(foam_env_vars, dir):
     """Run the decomposition step for the training data
@@ -304,7 +258,7 @@ def run_data_generation(foam_env_vars, node_per_case,
         # Create the simulation model
         exec_path = "/".join([gen_dir,f"Case{i}"])
         model_name = f"data_gen{i}"
-        model = create_of_model(launcher, node_per_case, tasks_per_node,
+        model = create_of_model(node_per_case, tasks_per_node,
                                 executable, exe_args, model_name, exec_path,
                                 foam_env_vars)
 
@@ -348,7 +302,7 @@ def run_data_gen_dataset_construction(gen_dir):
     model_name = "dataset_construction"
     nodes = 1
     tasks_per_node = 1
-    script_model = create_of_model(launcher, nodes, tasks_per_node,
+    script_model = create_of_model(nodes, tasks_per_node,
                                    executable, exe_args, model_name, gen_dir,
                                    foam_env_vars)
 
@@ -380,7 +334,7 @@ def run_training(training_dir, training_node_count,
     modle_name = "training"
     nodes = training_node_count
     tasks_per_node = training_tasks_per_node
-    training_model = create_of_model(launcher, nodes, tasks_per_node,
+    training_model = create_of_model(nodes, tasks_per_node,
                                      executable, exe_args, model_name, None,
                                      foam_env_vars)
 
@@ -466,44 +420,21 @@ def generate_simulation_files(node_count, tasks_per_node,
         "proc_x_y":str(big) + " " + str(small),
         "n_procs":str(n_proc)}
 
-    # Create a SmartSim model that will generate all of
-    # files for the OpenFOAM run.  We do this because OpenFOAM
-    # splits up execution of the simulation into different
-    # steps (i.e. executables).  We split up the generation
-    # into a copy step and a configure step because currently
-    # to_configure param does not support directories and we
-    # want to preserve directory structure
-    copy_model = exp.create_model(sim_name, None)
+    # Create a SmartSim model that will generate and
+    # configure all files
+    model = exp.create_model(sim_name, None, params=params)
 
-    # Copy all input files
-    files_to_copy = []
-    files_to_copy.append(sim_input_dir)
-    files_to_copy.append("/".join([gen_dir,"means"]))
+    # Copy "means" files from data generation directory
+    files_to_copy = ["/".join([gen_dir,"means"])]
 
-    copy_model.attach_generator_files(to_copy=files_to_copy)
+    # Attach the entire data generation directory and files
+    # to copy
+    model.attach_generator_files(to_copy=files_to_copy,
+                                 to_configure=sim_input_dir)
 
-    # Generate the experiment file directory
-    exp.generate(copy_model, overwrite=True)
-
-    # Create a list of tuples containing the
-    # original input directory, the subdirectory inside of the
-    # top-level diretory and the file name
-    config_files = [(sim_input_dir, "system/", "decomposeParDict")]
-
-    # Create a model used to write configured input files
-    config_model =  exp.create_model("config", None, params=params)
-
-    # Attach all the files to be configured
-    config_model.attach_generator_files(to_configure=[f[0]+f[1]+f[2] for f in config_files])
-
-    # Generate the configured files into a "config" directory
-    exp.generate(config_model, tag="@", overwrite=True)
-
-    # Copy the configured files to the simulation directory
-    for c_file in config_files:
-        old_file = "./" + exp_name + "/config/" + c_file[2]
-        new_file = "./" + exp_name + "/openfoam/" + c_file[1] + c_file[2]
-        rename(old_file, new_file)
+    # Generate the experiment file directory and replace
+    # config parameters
+    exp.generate(model, tag="@", overwrite=True)
 
 def run_simulation(foam_env_vars, nodes, ppn, sim_dir):
     """Run the openFOAM simulation
@@ -530,7 +461,7 @@ def run_simulation(foam_env_vars, nodes, ppn, sim_dir):
 
     # Create the simulation model
     model_name = "sim"
-    model = create_of_model(launcher, nodes, ppn, executable,
+    model = create_of_model(nodes, ppn, executable,
                             exe_args, model_name, sim_dir,
                             foam_env_vars)
 
@@ -556,7 +487,7 @@ def run_foamtovtk(foam_env_vars, sim_dir):
     nodes = 1
     ppn = 1
     exe_args = None
-    model = create_of_model(launcher, nodes, ppn, executable,
+    model = create_of_model(nodes, ppn, executable,
                             exe_args, model_name, sim_dir,
                             foam_env_vars)
     # Start the fomatovtk utility
@@ -566,7 +497,6 @@ if __name__ == "__main__":
 
     import argparse
     parser = argparse.ArgumentParser(description="Run OpenFOAM ML Experiment")
-    parser.add_argument("--launcher", type=str, default="slurm", help="Launcher for the experiment")
     parser.add_argument("--db_nodes", type=int, default=1, help="Number of nodes for the database")
     parser.add_argument("--db_port", type=int, default=6780, help="Port for the database")
     parser.add_argument("--db_interface", type=str, default="ipogif0", help="Network interface for the database")
@@ -594,7 +524,6 @@ if __name__ == "__main__":
     sim_tasks_per_node = args.sim_ppn
     sim_input_dir = "./simulation_inputs/"
 
-
     # Training settings (do not change)
     training_node_count = 1
     training_tasks_per_node = 1
@@ -611,10 +540,7 @@ if __name__ == "__main__":
     gen_dir = "/".join([getcwd(),exp_name,gen_name])
 
     # Create and set the global variable exp
-    exp = Experiment(name=exp_name, launcher=args.launcher)
-
-    # Create and set the global variable launcher
-    launcher = args.launcher
+    exp = Experiment(name=exp_name, launcher="auto")
 
     # Launch orchestrator
     db = start_database(db_port, db_node_count, db_cpus, db_tpq, db_interface)

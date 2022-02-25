@@ -53,42 +53,23 @@ mkdir OpenFOAM-5.x/wmake/rules/crayxcGcc
 cp -r smartsim-openFOAM/builds/cray_xc/rules/* OpenFOAM-5.x/wmake/rules/crayxcGcc/
 ```
 
-Now that there are build rules for the Cray XC system, modify ``OpenFOAM-5.x/etc/bashrc`` to specify ``cray`` for ``WM_ARCH_OPTION``:
+Copy the OpenFOAM ``bashrc`` file that contains edits for
+``WM_ARCH_OPTION=cray`` and ``WM_MPLIB=MPICH2``:
 
-```
-# Locate WM_ARCH_OPTION in OpenFOAM-5.x/etc/bashrc and set to "cray"
-WM_ARCH_OPTION=cray
-```
-
-Also, the MPI library rules contained in the XC rules must be specified in the ``OpenFOAM-5.x/etc/bashrc`` file.  Locate ``WM_MPLIB`` and set to ``MPICH2``:
-
-```
-# Locate WM_MPLIB in OpenFOAM-5.x/etc/bashrc and set to "MPICH2"
-WM_MPLIB=MPICH2
+```bash
+cp smartsim-openFOAM/builds/cray_xc/bashrc OpenFOAM-5.x/etc/bashrc
 ```
 
-Cray specific compiler options need to be added to ``OpenFOAM-5.x/etc/config.sh/settings``. These options are shown in the block below, and ``smartsim-openFOAM/builds/cray_xc/settings`` shows the proper placement of these options.
+Now, copy the custom compiler options:
 
-```
-# Add these Cray compiler settings to OpenFOAM-5.x/etc/config.sh/settings
-cray)
-    WM_ARCH=crayxc
-    export WM_COMPILER_LIB_ARCH=64
-    export WM_CC='cc'
-    export WM_CXX='CC'
-    export WM_CFLAGS='-fPIC'
-    export WM_CXXFLAGS='-fPIC'
-    ;;
+```bash
+cp smartsim-openFOAM/builds/cray_xc/settings OpenFOAM-5.x/etc/config.sh/settings
 ```
 
-Cray MPI settings need to be added to ``OpenFOAM-5.x/etc/config.sh/mpi``. These options are shown in the block below, and ``smartsim-openFOAM/builds/cray_xc/mpi`` shows the proper placement of these options.  Verify that your current environment has ``$MPICH_DIR`` set to the correct path.  If not, this ``MPICH_DIR`` should be set to the MPICH install directory.
+Now, copy the custom MPI settings.  Verify that your current environment has ``MPICH_DIR`` set to the correct path.  If not, this ``MPICH_DIR`` should be set to the MPICH install directory.
 
-```
-# Add these Cray MPI settings to OpenFOAM-5.x/etc/config.sh/mpi
-MPICH2)
-    export FOAM_MPI=mpich2
-    export MPI_ARCH_PATH=$MPICH_DIR
-    ;;
+```bash
+cp smartsim-openFOAM/builds/cray_xc/mpi OpenFOAM-5.x/etc/config.sh/mpi
 ```
 
 The OpenFOAM build environment can now be set up with:
