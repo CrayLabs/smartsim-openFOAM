@@ -1,4 +1,0 @@
-graphviz==0.17
-pydot==1.4.2
-sklearn==0.0
-tensorflow==2.5.2
